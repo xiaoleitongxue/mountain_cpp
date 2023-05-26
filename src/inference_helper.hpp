@@ -12,4 +12,5 @@ void flip_sub_nets_weghts(std::vector<std::vector<network>> sub_nets,
                           std::vector<partition_parameter> partition_params,
                           std::vector<ftp_parameter> ftp_params);
 void swap(float *input, int start, int end);
+
 #endif
