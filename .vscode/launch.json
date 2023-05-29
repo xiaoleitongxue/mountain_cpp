@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Debug",
             "program": "${workspaceFolder}/build/main",
-            "args": ["../launch_json/launch.json"],
+            "args": ["/home/wsl/src/mountain_cpp/launch_json/launch.json"],
             "cwd": "${workspaceFolder}/darknet"
         }
     ]

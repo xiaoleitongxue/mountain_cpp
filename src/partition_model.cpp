@@ -4,6 +4,69 @@
 #include <partition_model.hpp>
 #include <string>
 #include <vector>
+extern "C" LIB_API {
+  void empty_func(dropout_layer l, network_state state);
+  list *read_cfg(char *filename);
+  LAYER_TYPE string_to_layer_type(char *type);
+  void free_section(section * s);
+  void parse_data(char *data, float *a, int n);
+  struct size_params;
+  local_layer parse_local(list * options, size_params params);
+  convolutional_layer parse_convolutional(list * options, size_params params);
+  layer parse_crnn(list * options, size_params params);
+  layer parse_rnn(list * options, size_params params);
+  layer parse_gru(list * options, size_params params);
+  layer parse_lstm(list * options, size_params params);
+  layer parse_conv_lstm(list * options, size_params params);
+  layer parse_history(list * options, size_params params);
+  connected_layer parse_connected(list * options, size_params params);
+  softmax_layer parse_softmax(list * options, size_params params);
+  contrastive_layer parse_contrastive(list * options, size_params params);
+  int *parse_yolo_mask(char *a, int *num);
+  float *get_classes_multipliers(char *cpc, const int classes,
+                                 const float max_delta);
+  layer parse_yolo(list * options, size_params params);
+  int *parse_gaussian_yolo_mask(char *a, int *num);
+  layer parse_gaussian_yolo(list * options, size_params params);
+  layer parse_region(list * options, size_params params);
+  detection_layer parse_detection(list * options, size_params params);
+  cost_layer parse_cost(list * options, size_params params);
+  crop_layer parse_crop(list * options, size_params params);
+  layer parse_reorg(list * options, size_params params);
+  layer parse_reorg_old(list * options, size_params params);
+  maxpool_layer parse_local_avgpool(list * options, size_params params);
+  maxpool_layer parse_maxpool(list * options, size_params params);
+  avgpool_layer parse_avgpool(list * options, size_params params);
+  dropout_layer parse_dropout(list * options, size_params params);
+  layer parse_normalization(list * options, size_params params);
+  layer parse_batchnorm(list * options, size_params params);
+  layer parse_shortcut(list * options, size_params params, network net);
+  layer parse_scale_channels(list * options, size_params params, network net);
+  layer parse_sam(list * options, size_params params, network net);
+  layer parse_implicit(list * options, size_params params, network net);
+  layer parse_activation(list * options, size_params params);
+  layer parse_upsample(list * options, size_params params, network net);
+  route_layer parse_route(list * options, size_params params);
+  learning_rate_policy get_policy(char *s);
+  void parse_net_options(list * options, network * net);
+  int is_network(section * s);
+  void set_train_only_bn(network net);
+  list *read_cfg(char *filename);
+  void save_convolutional_weights_binary(layer l, FILE * fp);
+  void save_shortcut_weights(layer l, FILE * fp);
+  void save_implicit_weights(layer l, FILE * fp);
+  void save_convolutional_weights(layer l, FILE * fp);
+  void save_convolutional_weights_ema(layer l, FILE * fp);
+  void save_batchnorm_weights(layer l, FILE * fp);
+  void save_connected_weights(layer l, FILE * fp);
+  void transpose_matrix(float *a, int rows, int cols);
+  void load_connected_weights(layer l, FILE * fp, int transpose);
+  void load_batchnorm_weights(layer l, FILE * fp);
+  void load_convolutional_weights_binary(layer l, FILE * fp);
+  void load_convolutional_weights(layer l, FILE * fp);
+  void load_shortcut_weights(layer l, FILE * fp);
+  void load_implicit_weights(layer l, FILE * fp);
+}
 void grid(network net, ftp_parameter &ftp_para, int partition_w,
           int partition_h, int from, int to) {
 
@@ -86,6 +149,7 @@ perform_ftp(std::vector<partition_parameter> partition_params, int stages,
     int partition_h = partition_params[i].partition_h;
     int from = partition_params[i].from;
     int to = partition_params[i].to;
+    int partitions = partition_params[i].partitions;
 
     ftp_params.push_back(ftp_parameter{partition_w, partition_h, from, to});
 
@@ -103,26 +167,50 @@ perform_ftp(std::vector<partition_parameter> partition_params, int stages,
         ++id;
       }
     }
-    // resize ftp
-    //  ftp_params[i].input_tiles.resize(partition_h * partition_w,
-    //  std::vector<tile_region>(to - from + 1));
-    //  ftp_params[i].output_tiles.resize(partition_h * partition_w,
-    //  std::vector<tile_region>(to - from + 1));
-    grid(net, ftp_params[i], partition_w, partition_h, from, to);
-    for (int k = 0; k < ftp_params[i].partitions_h; k++) {
-      for (int p = 0; p < ftp_params[i].partitions_w; p++) {
-        for (int q = to - from; q >= 0; --q) {
-          ftp_params[i].input_tiles[ftp_params[i].task_ids[k][p]][q] =
-              traversal(
-                  ftp_params[i].output_tiles[ftp_params[i].task_ids[k][p]][q],
-                  q, net);
-          if (q > 0)
-            ftp_params[i].output_tiles[ftp_params[i].task_ids[k][p]][q - 1] =
-                ftp_params[i].input_tiles[ftp_params[i].task_ids[k][p]][q];
+    if (partitions > 1) {
+      // resize ftp
+      //  ftp_params[i].input_tiles.resize(partition_h * partition_w,
+      //  std::vector<tile_region>(to - from + 1));
+      //  ftp_params[i].output_tiles.resize(partition_h * partition_w,
+      //  std::vector<tile_region>(to - from + 1));
+      grid(net, ftp_params[i], partition_w, partition_h, from, to);
+      for (int k = 0; k < ftp_params[i].partitions_h; k++) {
+        for (int p = 0; p < ftp_params[i].partitions_w; p++) {
+          for (int q = to - from; q >= 0; --q) {
+            ftp_params[i].input_tiles[ftp_params[i].task_ids[k][p]][q] =
+                traversal(
+                    ftp_params[i].output_tiles[ftp_params[i].task_ids[k][p]][q],
+                    q, net);
+            if (q > 0)
+              ftp_params[i].output_tiles[ftp_params[i].task_ids[k][p]][q - 1] =
+                  ftp_params[i].input_tiles[ftp_params[i].task_ids[k][p]][q];
+          }
         }
+      }
+    } else {
+      // final stage nets
+      for (int r = from; r <= to; r++) {
+        ftp_params[i].input_tiles[0][r - from].w = net.layers[r].w;
+        ftp_params[i].input_tiles[0][r - from].h = net.layers[r].h;
+        ftp_params[i].input_tiles[0][r - from].c = net.layers[r].c;
+        ftp_params[i].input_tiles[0][r - from].h1 = 0;
+        ftp_params[i].input_tiles[0][r - from].h2 = net.layers[r].h - 1;
+        ftp_params[i].input_tiles[0][r - from].w1 = 0;
+        ftp_params[i].input_tiles[0][r - from].w2 = net.layers[r].w - 1;
+
+        ftp_params[i].output_tiles[0][r - from].w = net.layers[r].out_w;
+        ftp_params[i].output_tiles[0][r - from].h = net.layers[r].out_h;
+        ftp_params[i].output_tiles[0][r - from].c = net.layers[r].out_c;
+        ftp_params[i].output_tiles[0][r - from].h1 = 0;
+        ftp_params[i].output_tiles[0][r - from].h2 = net.layers[r].out_h - 1;
+        ftp_params[i].output_tiles[0][r - from].w1 = 0;
+        ftp_params[i].output_tiles[0][r - from].w2 = net.layers[r].out_w - 1;
       }
     }
   }
+
+  // final stage is not needs to partiton, just copy from original network
+
   return ftp_params;
 }
 
@@ -172,23 +260,21 @@ network parse_network_cfg_custom_whc(char *filename,
   while (n_m) {
     kvp *p = (kvp *)n_m->val;
     if (strcmp(p->key, "width") == 0) {
-      char *temp = const_cast<char *>(
-          std::to_string(ftp_param.input_tiles[task_id][0].w).c_str());
-
+      std::string width = std::to_string(ftp_param.input_tiles[task_id][0].w);
+      char *temp = const_cast<char *>(width.c_str());
       p->val = (char *)malloc(strlen(temp) * sizeof(char));
       memcpy(p->val, temp, strlen(temp) * sizeof(char));
     }
     if (strcmp(p->key, "height") == 0) {
-      char *temp = const_cast<char *>(
-          std::to_string(ftp_param.input_tiles[task_id][0].h).c_str());
-
+      std::string height = std::to_string(ftp_param.input_tiles[task_id][0].h);
+      char *temp = const_cast<char *>(height.c_str());
       p->val = (char *)malloc(strlen(temp) * sizeof(char));
       memcpy(p->val, temp, strlen(temp) * sizeof(char));
     }
     if (strcmp(p->key, "channels") == 0) {
-      char *temp = const_cast<char *>(
-          std::to_string(ftp_param.input_tiles[task_id][0].c).c_str());
-
+      std::string channels =
+          std::to_string(ftp_param.input_tiles[task_id][0].c);
+      char *temp = const_cast<char *>(channels.c_str());
       p->val = (char *)malloc(strlen(temp) * sizeof(char));
       memcpy(p->val, temp, strlen(temp) * sizeof(char));
     }
@@ -690,7 +776,8 @@ void load_sub_nets_weights(std::vector<std::vector<network>> sub_nets,
   for (int i = 0; i < stages; ++i) {
     for (int j = 0; j < partition_params[i].partitions; ++j) {
       load_weights_upto_subnet(net, sub_nets[i][j], weights, 0, net.n,
-                               partition_params[i].from, partition_params[i].to);
+                               partition_params[i].from,
+                               partition_params[i].to);
     }
   }
   free_network(net);

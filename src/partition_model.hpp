@@ -1,12 +1,9 @@
-#ifndef PARTITION_MODEL_H
-#define PARTITION_MODEL_H
+#ifndef PARTITION_MODEL_HPP
+#define PARTITION_MODEL_HPP
 #include "darknet.h"
-#include "yolo_v2_class.hpp"
 #include <system_error>
 #include <vector>
-
 #include "network.h"
-
 extern "C" {
 #include "activation_layer.h"
 #include "activations.h"
@@ -20,6 +17,7 @@ extern "C" {
 #include "cost_layer.h"
 #include "crnn_layer.h"
 #include "crop_layer.h"
+#include "data.h"
 #include "detection_layer.h"
 #include "dropout_layer.h"
 #include "gaussian_yolo_layer.h"
@@ -45,8 +43,9 @@ extern "C" {
 #include "utils.h"
 #include "version.h"
 #include "yolo_layer.h"
-// #include "stb_image.h"
 }
+
+// #include "stb_image.h"
 
 typedef struct {
   char *type;
@@ -63,69 +62,7 @@ typedef struct size_params {
   int train;
   network net;
 } size_params;
-extern "C" LIB_API {
-  void empty_func(dropout_layer l, network_state state);
-  list *read_cfg(char *filename);
-  LAYER_TYPE string_to_layer_type(char *type);
-  void free_section(section * s);
-  void parse_data(char *data, float *a, int n);
-  struct size_params;
-  local_layer parse_local(list * options, size_params params);
-  convolutional_layer parse_convolutional(list * options, size_params params);
-  layer parse_crnn(list * options, size_params params);
-  layer parse_rnn(list * options, size_params params);
-  layer parse_gru(list * options, size_params params);
-  layer parse_lstm(list * options, size_params params);
-  layer parse_conv_lstm(list * options, size_params params);
-  layer parse_history(list * options, size_params params);
-  connected_layer parse_connected(list * options, size_params params);
-  softmax_layer parse_softmax(list * options, size_params params);
-  contrastive_layer parse_contrastive(list * options, size_params params);
-  int *parse_yolo_mask(char *a, int *num);
-  float *get_classes_multipliers(char *cpc, const int classes,
-                                 const float max_delta);
-  layer parse_yolo(list * options, size_params params);
-  int *parse_gaussian_yolo_mask(char *a, int *num);
-  layer parse_gaussian_yolo(list * options, size_params params);
-  layer parse_region(list * options, size_params params);
-  detection_layer parse_detection(list * options, size_params params);
-  cost_layer parse_cost(list * options, size_params params);
-  crop_layer parse_crop(list * options, size_params params);
-  layer parse_reorg(list * options, size_params params);
-  layer parse_reorg_old(list * options, size_params params);
-  maxpool_layer parse_local_avgpool(list * options, size_params params);
-  maxpool_layer parse_maxpool(list * options, size_params params);
-  avgpool_layer parse_avgpool(list * options, size_params params);
-  dropout_layer parse_dropout(list * options, size_params params);
-  layer parse_normalization(list * options, size_params params);
-  layer parse_batchnorm(list * options, size_params params);
-  layer parse_shortcut(list * options, size_params params, network net);
-  layer parse_scale_channels(list * options, size_params params, network net);
-  layer parse_sam(list * options, size_params params, network net);
-  layer parse_implicit(list * options, size_params params, network net);
-  layer parse_activation(list * options, size_params params);
-  layer parse_upsample(list * options, size_params params, network net);
-  route_layer parse_route(list * options, size_params params);
-  learning_rate_policy get_policy(char *s);
-  void parse_net_options(list * options, network * net);
-  int is_network(section * s);
-  void set_train_only_bn(network net);
-  list *read_cfg(char *filename);
-  void save_convolutional_weights_binary(layer l, FILE * fp);
-  void save_shortcut_weights(layer l, FILE * fp);
-  void save_implicit_weights(layer l, FILE * fp);
-  void save_convolutional_weights(layer l, FILE * fp);
-  void save_convolutional_weights_ema(layer l, FILE * fp);
-  void save_batchnorm_weights(layer l, FILE * fp);
-  void save_connected_weights(layer l, FILE * fp);
-  void transpose_matrix(float *a, int rows, int cols);
-  void load_connected_weights(layer l, FILE * fp, int transpose);
-  void load_batchnorm_weights(layer l, FILE * fp);
-  void load_convolutional_weights_binary(layer l, FILE * fp);
-  void load_convolutional_weights(layer l, FILE * fp);
-  void load_shortcut_weights(layer l, FILE * fp);
-  void load_implicit_weights(layer l, FILE * fp);
-}
+
 
 typedef struct partition_parameter {
   int partition_w;
@@ -153,17 +90,13 @@ typedef struct def_ftp_para {
   std::vector<std::vector<int>> task_ids;
   std::vector<std::vector<tile_region>> input_tiles;
   std::vector<std::vector<tile_region>> output_tiles;
-  def_ftp_para(int partitions_w_, int partitions_h_, int from, int to) {
-    partitions_w = partitions_w_;
-    partitions_h = partitions_h_;
-    fused_layers = to - from + 1;
-    partitions = partitions_h_ * partitions_w_;
-    task_ids = std::vector(partitions_h_, std::vector<int>(partitions_w_));
-    input_tiles =
-        std::vector(partitions, std::vector<tile_region>(to - from + 1));
-    output_tiles =
-        std::vector(partitions, std::vector<tile_region>(to - from + 1));
-  }
+  def_ftp_para(int partitions_w_, int partitions_h_, int from, int to)
+      : partitions_w(partitions_w_), partitions_h(partitions_h_),
+        fused_layers(to - from + 1),
+        task_ids(partitions_h_, std::vector<int>(partitions_w_)),
+        partitions(partitions_h_ * partitions_w_),
+        input_tiles(partitions, std::vector<tile_region>(to - from + 1)),
+        output_tiles(partitions, std::vector<tile_region>(to - from + 1)) {}
 } ftp_parameter;
 
 std::vector<ftp_parameter>

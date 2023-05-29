@@ -1,4 +1,5 @@
 #include <inference_helper.hpp>
+#include "darknet.h"
 float *fliplr_feature_map(float *input, int w, int h, int c) {
   for (int i = 0; i < c; ++i) {
     // 行内翻转

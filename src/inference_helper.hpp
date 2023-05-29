@@ -1,6 +1,6 @@
 #ifndef INFERENCE_HELPER_HPP
 #define INFERENCE_HELPER_HPP
-#include <darknet.h>
+
 #include <partition_model.hpp>
 #include <yolo_v2_class.hpp>
 float *flip_feature_map(int type, float *input, int w, int h, int c);
