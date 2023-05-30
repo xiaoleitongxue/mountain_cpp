@@ -1,16 +1,20 @@
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(mountain_cpp)
-
-set(CMAKE_C_COMPILER clang-16)
-set(CMAKE_CXX_COMPILER clang++-16)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
+set(Torch_DIR /home/wsl/src/libtorch/share/cmake/Torch)
+find_package(Torch REQUIRED)
+
+# set(CMAKE_C_COMPILER clang-16)
+# set(CMAKE_CXX_COMPILER clang++-16)
+# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 
-# add_compile_options(-fdiagnostics-color=always)
 
-add_compile_options(-fcolor-diagnostics)
+
+# add_compile_options(-fcolor-diagnostics)
 
 set(Darknet_DIR ${CMAKE_CURRENT_LIST_DIR}/darknet/share/darknet)
 find_package(Darknet REQUIRED)
@@ -18,10 +22,6 @@ find_package(Darknet REQUIRED)
 set(nlohmann_json_DIR ${CMAKE_CURRENT_LIST_DIR}/json/build)
 find_package(nlohmann_json 3.2.0 REQUIRED)
 find_package(OpenCV REQUIRED)
-
-set(Torch_DIR /home/wsl/src/libtorch/share/cmake/Torch)
-find_package(Torch REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 add_library(data_packet src/data_packet.cpp)
 target_include_directories(data_packet PRIVATE src)

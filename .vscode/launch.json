@@ -7,9 +7,17 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug",
+            "name": "Master",
             "program": "${workspaceFolder}/build/main",
-            "args": ["/home/wsl/src/mountain_cpp/launch_json/launch.json"],
+            "args": ["/home/wsl/src/mountain_cpp/launch_json/launch.json", "master"],
+            "cwd": "${workspaceFolder}/darknet"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Worker",
+            "program": "${workspaceFolder}/build/main",
+            "args": ["/home/wsl/src/mountain_cpp/launch_json/launch.json", "worker", "0"],
             "cwd": "${workspaceFolder}/darknet"
         }
     ]

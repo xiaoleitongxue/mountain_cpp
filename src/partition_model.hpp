@@ -47,6 +47,11 @@ extern "C" {
 
 // #include "stb_image.h"
 
+typedef struct server_address {
+  std::string ip;
+  int port;
+} server_address;
+
 typedef struct {
   char *type;
   list *options;

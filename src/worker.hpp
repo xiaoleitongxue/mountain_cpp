@@ -13,16 +13,11 @@ class Compare {
 public:
   bool operator()(const Data_packet &a, const Data_packet &b) {
     if (a.frame_seq == b.frame_seq) {
-      return a.stage < b.stage;
+      return a.stage >= b.stage;
     }
-    return a.frame_seq < b.frame_seq;
+    return a.frame_seq > b.frame_seq;
   }
 };
-
-typedef struct server_address {
-  std::string ip;
-  int port;
-} server_address;
 
 class Worker {
 private:
@@ -72,7 +67,7 @@ private:
   std::vector<partition_parameter> m_partition_params;
   std::vector<ftp_parameter> m_ftp_params;
   std::vector<server_address> m_server_addresses;
-
+  std::vector<std::vector<network>> m_sub_nets;
   std::thread m_pritition_image_thread;
   std::thread m_merge_partitions_thread;
   std::thread m_inference_thread;
@@ -83,12 +78,12 @@ public:
   Master(std::string ip, int port, network net, network last_stage_net,
          int frames, std::vector<partition_parameter> partition_params,
          std::vector<ftp_parameter> ftp_params,
-         std::vector<server_address> server_addresses);
+         std::vector<server_address> server_addresses, std::vector<std::vector<network>> sub_nets);
   void m_pritition_image();
   void m_merge_partitions();
   void m_inference();
   int m_send_data_packet();
-  void m_push_image();
+  void m_push_image(std::string image_path_);
   static LIB_API image_t load_image(std::string image_filename);
 };
 
