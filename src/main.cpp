@@ -1,6 +1,6 @@
 #include <unistd.h>
 #include <worker.hpp>
-
+#include <cuda_runtime.h>
 #include "inference_helper.hpp"
 #include <iostream>
 #include <parse_launch_config.hpp>
@@ -16,10 +16,14 @@ int main(int argc, char *argv[]) {
   char *cfgfile = const_cast<char *>(launch_param.cfg.c_str());
   char *weights_file = const_cast<char *>(launch_param.weights.c_str());
   // load_network
-  network *net = load_network(cfgfile, weights_file, 0);
+  // network *net = load_network(cfgfile, weights_file, 0);
+  network net = parse_network_cfg_custom(cfgfile, 1, 1);
+  if (weights_file) {
+    load_weights(&net, weights_file);
+  }
   // ftp
   std::vector<ftp_parameter> ftp_params =
-      perform_ftp(launch_param.partition_params, launch_param.stages, *net);
+      perform_ftp(launch_param.partition_params, launch_param.stages, net);
   // generate sub_net
   std::vector<std::vector<network>> sub_nets = generate_sub_network(
       cfgfile, ftp_params, launch_param.stages, launch_param.partition_params);
@@ -27,14 +31,15 @@ int main(int argc, char *argv[]) {
   load_sub_nets_weights(sub_nets, cfgfile, weights_file, launch_param.stages,
                         launch_param.partition_params);
   // flip weights
-  flip_sub_nets_weghts(sub_nets, launch_param.stages,
-                       launch_param.partition_params, ftp_params);
+  flip_sub_nets_weights(sub_nets, launch_param.stages,
+                        launch_param.partition_params, ftp_params);
 
+ 
   std::string worker_type = argv[2];
   if (worker_type == "master") {
     Master master = Master{launch_param.master_addr.ip,
                            launch_param.master_addr.port,
-                           *net,
+                           net,
                            sub_nets[launch_param.stages - 1][0],
                            launch_param.frames,
                            launch_param.partition_params,

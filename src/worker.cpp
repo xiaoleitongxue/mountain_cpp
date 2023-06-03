@@ -18,6 +18,30 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+void show_console_result(std::vector<bbox_t> const result_vec,
+                         std::vector<std::string> const obj_names,
+                         int frame_id = -1) {
+  if (frame_id >= 0)
+    std::cout << " Frame: " << frame_id << std::endl;
+  for (auto &i : result_vec) {
+    if (obj_names.size() > i.obj_id)
+      std::cout << obj_names[i.obj_id] << " - ";
+    std::cout << "obj_id = " << i.obj_id << ",  x = " << i.x << ", y = " << i.y
+              << ", w = " << i.w << ", h = " << i.h << std::setprecision(3)
+              << ", prob = " << i.prob << std::endl;
+  }
+}
+
+std::vector<std::string> objects_names_from_file(std::string const filename) {
+  std::ifstream file(filename);
+  std::vector<std::string> file_lines;
+  if (!file.is_open())
+    return file_lines;
+  for (std::string line; getline(file, line);)
+    file_lines.push_back(line);
+  std::cout << "object names loaded \n";
+  return file_lines;
+}
 
 static image load_image_stb(char *filename, int channels) {
   int w, h, c;
@@ -64,13 +88,14 @@ void Worker::m_inference() {
     assert(data_packet.tensor.sizes()[2] == net.w);
     // convert tensor to array
     float *X = data_packet.tensor.data_ptr<float>();
+    std::cout << "input: " << *X << std::endl;
     float *out = network_predict(net, X);
-
+    std::cout << "output: " << *out << std::endl;
     // convert array to torch::Tensor
     c10::IntArrayRef s = {net.layers[net.n - 1].out_c,
                           net.layers[net.n - 1].out_h,
                           net.layers[net.n - 1].out_w};
-  
+
     torch::Tensor tensor = torch::from_blob(out, s);
     std::cout << net.layers[net.n - 1].out_c << " "
               << net.layers[net.n - 1].out_h << " "
@@ -79,10 +104,10 @@ void Worker::m_inference() {
     assert(tensor.sizes()[1] == net.layers[net.n - 1].out_h);
     assert(tensor.sizes()[2] == net.layers[net.n - 1].out_w);
 
-    std::ostringstream stream;
-    torch::save(tensor, stream);
-    const std::string str = stream.str();
-    const int length = str.length();
+    // std::ostringstream stream;
+    // torch::save(tensor, stream);
+    // const std::string str = stream.str();
+    // const int length = str.length();
 
     // create Data_packet
     Data_packet new_data_packet{data_packet.frame_seq,
@@ -93,7 +118,7 @@ void Worker::m_inference() {
                                 net.layers[net.n - 1].out_w,
                                 net.layers[net.n - 1].out_h,
                                 net.layers[net.n - 1].out_c,
-                                length,
+                                0,
                                 tensor};
     // push result to result queue
     std::unique_lock<std::mutex> lock2(m_prio_result_queue_mutex);
@@ -141,7 +166,6 @@ int Worker::m_receive_data_packet() {
   // std::cout << "worker listening at" << m_port << std::endl;
   std::future<void> readFuture = std::async(std::launch::async, [this,
                                                                  new_socket]() {
-  
     while (1) {
       int metadata_buffer[9];
       Data_packet data_packet;
@@ -253,14 +277,14 @@ void Master::m_push_image(std::string image_path_) {
       sized = resize_image(im, m_net.w, m_net.h);
     // covert image to torch tensor
     c10::IntArrayRef s = {sized.c, sized.h, sized.w};
-  
+
     torch::Tensor tensor = torch::from_blob(sized.data, s);
     assert(tensor.sizes()[0] == sized.c);
     assert(tensor.sizes()[1] == sized.h);
     assert(tensor.sizes()[2] == sized.w);
     Data_packet data_packet{i,       0,       0,       0, 0,
                             sized.w, sized.h, sized.c, 0, tensor};
-
+    std::cout << *sized.data << std::endl;
     // push image to queue
     std::unique_lock<std::mutex> lock(m_prio_image_queue_mutex);
     m_prio_image_queue.push(data_packet);
@@ -280,9 +304,9 @@ void Master::m_pritition_image() {
     lock.unlock();
     int frame_seq = data_packet.frame_seq;
     int stage = data_packet.stage;
-    // crop image
-    for (int i = 0; i < m_ftp_params[stage].partitions_w; ++i) {
-      for (int j = 0; j < m_ftp_params[stage].partitions_h; ++j) {
+
+    for (int i = 0; i < m_ftp_params[stage].partitions_h; ++i) {
+      for (int j = 0; j < m_ftp_params[stage].partitions_w; ++j) {
         int task_id = m_ftp_params[stage].task_ids[i][j];
         int dw1 = m_ftp_params[stage].input_tiles[task_id][0].w1;
         int dw2 = m_ftp_params[stage].input_tiles[task_id][0].w2;
@@ -297,35 +321,44 @@ void Master::m_pritition_image() {
         assert(partition.sizes()[0] == c);
         assert(partition.sizes()[1] == dh2 - dh1 + 1);
         assert(partition.sizes()[2] == dw2 - dw1 + 1);
+        torch::Tensor fliped_partition;
         switch (task_id) {
         case 0:
+          fliped_partition = partition;
           break;
         case 1:
           // flip lr
-          partition.flip(2);
+          fliped_partition = partition.flip(2);
           break;
         case 2:
           // flip ud
-          partition.flip(1);
+          fliped_partition = partition.flip(1);
           break;
         case 3:
-          partition.flip({1, 2});
+          fliped_partition = partition.flip({1, 2});
           break;
         }
 
         Data_packet new_data_packet{frame_seq,
                                     task_id,
                                     stage,
-                                    m_partition_params[0].from,
-                                    m_partition_params[0].to,
+                                    m_partition_params[stage].from,
+                                    m_partition_params[stage].to,
                                     dw2 - dw1 + 1,
                                     dh2 - dh1 + 1,
                                     c,
                                     0,
-                                    partition};
+                                    fliped_partition};
         std::unique_lock<std::mutex> lock1(m_prio_task_queue_mutex);
         m_prio_task_queue.push(new_data_packet);
         lock1.unlock();
+        float *X = data_packet.tensor.data_ptr<float>();
+        float * out;
+        std::vector<network> test;
+        test.push_back(m_net);
+        float *out1 = network_predict(test[0], X);
+        float *out2 = network_predict(m_sub_nets[0][0], X);
+
       }
     }
   }
@@ -400,19 +433,21 @@ void Master::m_merge_partitions() {
       assert(cropped_partition.sizes()[0] == c);
       assert(cropped_partition.sizes()[1] == h);
       assert(cropped_partition.sizes()[2] == w);
+      torch::Tensor fliped_cropped_partition;
       switch (task_id) {
       case 0:
+        fliped_cropped_partition = cropped_partition;
         break;
       case 1:
         // flip lr
-        cropped_partition.flip(2);
+        fliped_cropped_partition = cropped_partition.flip(2);
         break;
       case 2:
         // flip ud
-        cropped_partition.flip(1);
+        fliped_cropped_partition = cropped_partition.flip(1);
         break;
       case 3:
-        cropped_partition.flip({1, 2});
+        fliped_cropped_partition = cropped_partition.flip({1, 2});
         break;
       }
       assert(cropped_partition.sizes()[0] == c);
@@ -425,7 +460,8 @@ void Master::m_merge_partitions() {
       // stitch partition to original image
       merged.index({at::indexing::Slice(0, c),
                     {at::indexing::Slice(dh1, dh1 + h)},
-                    {at::indexing::Slice(dw1, dw1 + w)}}) = cropped_partition;
+                    {at::indexing::Slice(dw1, dw1 + w)}}) =
+          fliped_cropped_partition;
     }
     Data_packet new_data_packet{frame_seq,
                                 task_id,
@@ -575,29 +611,99 @@ void Master::m_inference() {
     m_prio_merged_result_queue.pop();
     lock.unlock();
     // convert tensor to array
+
     float *X = data_packet.tensor.data_ptr<float>();
     float *out = network_predict(m_last_stage_net, X);
-
+    layer l = m_last_stage_net.layers[m_last_stage_net.n - 1];
+    assert(data_packet.tensor.sizes()[0] == m_last_stage_net.c);
+    assert(data_packet.tensor.sizes()[1] == m_last_stage_net.h);
+    assert(data_packet.tensor.sizes()[2] == m_last_stage_net.w);
+    for (int i = 0; i < l.out_c * l.out_w * l.out_h; ++i) {
+      std::cout << *(out + i) << " ";
+    }
+    // assert(*out == 0.232374);
     // convert array to torch::Tensor
-    c10::IntArrayRef s = {
-        m_last_stage_net.layers[m_last_stage_net.n - 1].out_c,
-        m_last_stage_net.layers[m_last_stage_net.n - 1].out_h,
-        m_last_stage_net.layers[m_last_stage_net.n - 1].out_w};
-
-    torch::Tensor tensor = torch::from_blob(out, s);
-
-    // // create Data_packet
-    // Data_packet new_data_packet{
-    //     data_packet.frame_seq,
-    //     data_packet.task_id,
-    //     data_packet.stage,
-    //     data_packet.from,
-    //     data_packet.to,
-    //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_w,
-    //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_h,
+    // c10::IntArrayRef s = {
     //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_c,
-    //     0,
-    //     tensor};
-    std::cout << *out << std::endl;
+    //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_h,
+    //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_w};
+
+    // torch::Tensor tensor = torch::from_blob(out, s);
+
+    // // // create Data_packet
+    // // Data_packet new_data_packet{
+    // //     data_packet.frame_seq,
+    // //     data_packet.task_id,
+    // //     data_packet.stage,
+    // //     data_packet.from,
+    // //     data_packet.to,
+    // //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_w,
+    // //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_h,
+    // //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_c,
+    // //     0,
+    // //     tensor};
+    auto img = load_image("./data/dog.jpg");
+    image im;
+    im.c = img.c;
+    im.data = img.data;
+    im.h = img.h;
+    im.w = img.w;
+
+    image sized;
+
+    if (m_net.w == im.w && m_net.h == im.h) {
+      sized = make_image(im.w, im.h, im.c);
+      memcpy(sized.data, im.data, im.w * im.h * im.c * sizeof(float));
+    } else
+      sized = resize_image(im, m_net.w, m_net.h);
+
+    l = m_net.layers[m_net.n - 1];
+    float thresh = 0.5;
+    int nboxes = 0;
+    int letterbox = 0;
+    float hier_thresh = 0.5;
+    float nms = .4;
+    detection *dets = get_network_boxes(&m_net, im.w, im.h, thresh, hier_thresh,
+                                        0, 1, &nboxes, letterbox);
+    if (nms)
+      do_nms_sort(dets, nboxes, l.classes, nms);
+
+    std::vector<bbox_t> bbox_vec;
+
+    for (int i = 0; i < nboxes; ++i) {
+      box b = dets[i].bbox;
+      int const obj_id = max_index(dets[i].prob, l.classes);
+      float const prob = dets[i].prob[obj_id];
+
+      if (prob > thresh) {
+        bbox_t bbox;
+        bbox.x = std::max((double)0, (b.x - b.w / 2.) * im.w);
+        bbox.y = std::max((double)0, (b.y - b.h / 2.) * im.h);
+        bbox.w = b.w * im.w;
+        bbox.h = b.h * im.h;
+        bbox.obj_id = obj_id;
+        bbox.prob = prob;
+        bbox.track_id = 0;
+        bbox.frames_counter = 0;
+        bbox.x_3d = NAN;
+        bbox.y_3d = NAN;
+        bbox.z_3d = NAN;
+
+        bbox_vec.push_back(bbox);
+      }
+    }
+
+    free_detections(dets, nboxes);
+    if (sized.data)
+      free(sized.data);
+
+    // #ifdef GPU
+    //     if (cur_gpu_id != old_gpu_index)
+    //         cudaSetDevice(old_gpu_index);
+    // #endif
+    std::vector<bbox_t> result_vec = bbox_vec;
+    free(img.data);
+    auto obj_names = objects_names_from_file("data/coco.names");
+    show_console_result(result_vec, obj_names, 0);
   }
 }

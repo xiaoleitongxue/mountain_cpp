@@ -7,17 +7,17 @@
   "stages": 2,
   "partition_params": [
     {
-      "partition_w": 2,
-      "partition_h": 2,
-      "partitions": 4,
+      "partition_w": 1,
+      "partition_h": 1,
+      "partitions": 1,
       "from": 0,
-      "to": 14
+      "to": 12
     },
     {
       "partition_w": 1,
       "partition_h": 1,
       "partitions": 1,
-      "from": 15,
+      "from": 13,
       "to": 15
     }
   ],

@@ -41,7 +41,7 @@ extern "C" {
 #include "softmax_layer.h"
 #include "upsample_layer.h"
 #include "utils.h"
-#include "version.h"
+// #include "version.h"
 #include "yolo_layer.h"
 }
 
@@ -117,10 +117,10 @@ network parse_network_cfg_custom_whc(char *filename,
                                      int stages, int stage, int batch,
                                      int time_steps);
 
-void load_weights_upto_subnet(network net, network &sub_net, char *filename,
-                              int start, int cutoff, int start_layer,
+void load_weights_upto_subnet(network *net, network *sub_net, char *filename,
+                              int cutoff, int start_layer,
                               int end_layer);
-void load_sub_nets_weights(std::vector<std::vector<network>> sub_nets,
+void load_sub_nets_weights(std::vector<std::vector<network>> &sub_nets,
                            char *filename, char *weights, int stages,
                            std::vector<partition_parameter> partition_params);
 #endif

@@ -68,6 +68,7 @@ private:
   std::vector<ftp_parameter> m_ftp_params;
   std::vector<server_address> m_server_addresses;
   std::vector<std::vector<network>> m_sub_nets;
+  
   std::thread m_pritition_image_thread;
   std::thread m_merge_partitions_thread;
   std::thread m_inference_thread;

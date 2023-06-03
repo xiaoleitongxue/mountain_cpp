@@ -1,6 +1,9 @@
 
+#include "parser.h"
 #include <cstdlib>
 #include <cstring>
+#include <darknet.h>
+#include <iterator>
 #include <partition_model.hpp>
 #include <string>
 #include <vector>
@@ -180,7 +183,7 @@ perform_ftp(std::vector<partition_parameter> partition_params, int stages,
             ftp_params[i].input_tiles[ftp_params[i].task_ids[k][p]][q] =
                 traversal(
                     ftp_params[i].output_tiles[ftp_params[i].task_ids[k][p]][q],
-                    q, net);
+                    from + q, net);
             if (q > 0)
               ftp_params[i].output_tiles[ftp_params[i].task_ids[k][p]][q - 1] =
                   ftp_params[i].input_tiles[ftp_params[i].task_ids[k][p]][q];
@@ -225,7 +228,8 @@ generate_sub_network(char *cfg_file, std::vector<ftp_parameter> ftp_params,
   for (int i = 0; i < stages; ++i) {
     for (int j = 0; j < partition_params[i].partitions; ++j) {
       network net = parse_network_cfg_custom_whc(
-          cfg_file, partition_params[i], ftp_params[i], j, stages, i, 0, 1);
+          cfg_file, partition_params[i], ftp_params[i], j, stages, i, 1, 1);
+      // network net = parse_network_cfg_custom(cfg_file, 1, 1);
       sub_nets[i][j] = net;
     }
   }
@@ -254,34 +258,8 @@ network parse_network_cfg_custom_whc(char *filename,
   list *options = s->options;
   if (!is_network(s))
     error("First section must be [net] or [network]", DARKNET_LOC);
-
-  // change option value
-  node *n_m = options->front;
-  while (n_m) {
-    kvp *p = (kvp *)n_m->val;
-    if (strcmp(p->key, "width") == 0) {
-      std::string width = std::to_string(ftp_param.input_tiles[task_id][0].w);
-      char *temp = const_cast<char *>(width.c_str());
-      p->val = (char *)malloc(strlen(temp) * sizeof(char));
-      memcpy(p->val, temp, strlen(temp) * sizeof(char));
-    }
-    if (strcmp(p->key, "height") == 0) {
-      std::string height = std::to_string(ftp_param.input_tiles[task_id][0].h);
-      char *temp = const_cast<char *>(height.c_str());
-      p->val = (char *)malloc(strlen(temp) * sizeof(char));
-      memcpy(p->val, temp, strlen(temp) * sizeof(char));
-    }
-    if (strcmp(p->key, "channels") == 0) {
-      std::string channels =
-          std::to_string(ftp_param.input_tiles[task_id][0].c);
-      char *temp = const_cast<char *>(channels.c_str());
-      p->val = (char *)malloc(strlen(temp) * sizeof(char));
-      memcpy(p->val, temp, strlen(temp) * sizeof(char));
-    }
-    n_m = n_m->next;
-  }
-
   parse_net_options(options, &net);
+
 #ifdef GPU
   printf("net.optimized_memory = %d \n", net.optimized_memory);
   if (net.optimized_memory >= 2 && params.train) {
@@ -291,6 +269,12 @@ network parse_network_cfg_custom_whc(char *filename,
   }
 #endif // GPU
 
+  net.w = ftp_param.input_tiles[task_id][0].w;
+  net.h = ftp_param.input_tiles[task_id][0].h;
+  net.c = ftp_param.input_tiles[task_id][0].c;
+  net.inputs = net.w * net.h * net.c;
+  net.max_crop = net.w * 2;
+  net.min_crop = net.w;
   params.h = net.h;
   params.w = net.w;
   params.c = net.c;
@@ -345,22 +329,12 @@ network parse_network_cfg_custom_whc(char *filename,
   }
 
   int old_params_train = params.train;
-
-  int start_layer_index = partition_param.from;
-  int end_layer_index = partition_param.to;
-  int flag = 0;
-  while (flag < start_layer_index) {
-    flag++;
-    s = (section *)n->val;
-    free_section(s);
-    n = n->next;
-  }
-
+  int fused_layers = 0;
   fprintf(
       stderr,
       "   layer   filters  size/strd(dil)      input                output\n");
-  while (start_layer_index <= end_layer_index && n) {
-    start_layer_index++;
+  while (n && fused_layers < net.n) {
+    fused_layers++;
     params.train = old_params_train;
     if (count < last_stop_backward)
       params.train = 0;
@@ -634,12 +608,6 @@ network parse_network_cfg_custom_whc(char *filename,
       avg_counter++;
     }
   }
-  // release remaining
-  while (n) {
-    s = (section *)n->val;
-    free_section(s);
-    n = n->next;
-  }
 
   if (last_stop_backward > -1) {
     int k;
@@ -705,6 +673,7 @@ network parse_network_cfg_custom_whc(char *filename,
           // printf("\n\n PINNED DELTA GPU = %d \n", l.batch*l.outputs);
         }
       }
+
       net.layers[k] = l;
     }
   }
@@ -769,26 +738,31 @@ network parse_network_cfg_custom_whc(char *filename,
   return net;
 }
 
-void load_sub_nets_weights(std::vector<std::vector<network>> sub_nets,
-                           char *filename, char *weights, int stages,
+void load_sub_nets_weights(std::vector<std::vector<network>> &sub_nets,
+                           char *cfg_file, char *weights, int stages,
                            std::vector<partition_parameter> partition_params) {
-  network net = parse_network_cfg(filename);
+  // network net = parse_network_cfg(filename);
+  network net = parse_network_cfg_custom(cfg_file, 1, 1);
   for (int i = 0; i < stages; ++i) {
     for (int j = 0; j < partition_params[i].partitions; ++j) {
-      load_weights_upto_subnet(net, sub_nets[i][j], weights, 0, net.n,
+      load_weights_upto_subnet(&net, &sub_nets[i][j], weights, 
+                               partition_params[i].to,
                                partition_params[i].from,
                                partition_params[i].to);
+      // load_weights(&sub_nets[i][j], weights);
     }
   }
   free_network(net);
 }
 
-void load_weights_upto_subnet(network net, network &sub_net, char *filename,
-                              int start, int cutoff, int start_layer,
+void load_weights_upto_subnet(network *net, network *sub_net, char *filename, int cutoff, int start_layer,
                               int end_layer) {
 #ifdef GPU
-  if (net.gpu_index >= 0) {
-    cuda_set_device(net.gpu_index);
+  if (net->gpu_index >= 0) {
+    cuda_set_device(net->gpu_index);
+  }
+  if (sub_net->gpu_index >= 0) {
+    cuda_set_device(sub_net->gpu_index);
   }
 #endif
   fprintf(stderr, "Loading weights from %s...", filename);
@@ -803,27 +777,40 @@ void load_weights_upto_subnet(network net, network &sub_net, char *filename,
   fread(&major, sizeof(int), 1, fp);
   fread(&minor, sizeof(int), 1, fp);
   fread(&revision, sizeof(int), 1, fp);
-  if ((major * 10 + minor) >= 2 && major < 1000 && minor < 1000) {
-    fread(net.seen, sizeof(size_t), 1, fp);
+  if ((major * 10 + minor) >= 2) {
+    printf("\n seen 64");
+    uint64_t iseen = 0;
+    fread(&iseen, sizeof(uint64_t), 1, fp);
+    *net->seen = iseen;
   } else {
-    int iseen = 0;
-    fread(&iseen, sizeof(int), 1, fp);
-    *net.seen = iseen;
+    printf("\n seen 32");
+    uint32_t iseen = 0;
+    fread(&iseen, sizeof(uint32_t), 1, fp);
+    *net->seen = iseen;
   }
+  *net->cur_iteration = get_current_batch(*net);
+  printf(", trained: %.0f K-images (%.0f Kilo-batches_64) \n",
+         (float)(*net->seen / 1000), (float)(*net->seen / 64000));
   int transpose = (major > 1000) || (minor > 1000);
 
   int i;
-  for (i = start; i < net.n && i < cutoff; ++i) {
+  for (i = 0; i >= start_layer && i < net->n && i <= cutoff; ++i) {
     layer l;
     if (i >= start_layer && i <= end_layer) {
-      l = sub_net.layers[i - start_layer];
+      l = sub_net->layers[i - start_layer];
     } else {
-      l = net.layers[i];
+      l = net->layers[i];
     }
     if (l.dontload)
       continue;
-    if (l.type == CONVOLUTIONAL || l.type == DECONVOLUTIONAL) {
+    if (l.type == CONVOLUTIONAL && l.share_layer == NULL) {
       load_convolutional_weights(l, fp);
+    }
+    if (l.type == SHORTCUT && l.nweights > 0) {
+      load_shortcut_weights(l, fp);
+    }
+    if (l.type == IMPLICIT) {
+      load_implicit_weights(l, fp);
     }
     if (l.type == CONNECTED) {
       load_connected_weights(l, fp, transpose);
@@ -841,29 +828,40 @@ void load_weights_upto_subnet(network net, network &sub_net, char *filename,
       load_connected_weights(*(l.self_layer), fp, transpose);
       load_connected_weights(*(l.output_layer), fp, transpose);
     }
-    if (l.type == LSTM) {
-      load_connected_weights(*(l.wi), fp, transpose);
-      load_connected_weights(*(l.wf), fp, transpose);
-      load_connected_weights(*(l.wo), fp, transpose);
-      load_connected_weights(*(l.wg), fp, transpose);
-      load_connected_weights(*(l.ui), fp, transpose);
-      load_connected_weights(*(l.uf), fp, transpose);
-      load_connected_weights(*(l.uo), fp, transpose);
-      load_connected_weights(*(l.ug), fp, transpose);
-    }
     if (l.type == GRU) {
-      if (1) {
-        load_connected_weights(*(l.wz), fp, transpose);
-        load_connected_weights(*(l.wr), fp, transpose);
-        load_connected_weights(*(l.wh), fp, transpose);
-        load_connected_weights(*(l.uz), fp, transpose);
-        load_connected_weights(*(l.ur), fp, transpose);
-        load_connected_weights(*(l.uh), fp, transpose);
-      } else {
-        load_connected_weights(*(l.reset_layer), fp, transpose);
-        load_connected_weights(*(l.update_layer), fp, transpose);
-        load_connected_weights(*(l.state_layer), fp, transpose);
+      load_connected_weights(*(l.input_z_layer), fp, transpose);
+      load_connected_weights(*(l.input_r_layer), fp, transpose);
+      load_connected_weights(*(l.input_h_layer), fp, transpose);
+      load_connected_weights(*(l.state_z_layer), fp, transpose);
+      load_connected_weights(*(l.state_r_layer), fp, transpose);
+      load_connected_weights(*(l.state_h_layer), fp, transpose);
+    }
+    if (l.type == LSTM) {
+      load_connected_weights(*(l.wf), fp, transpose);
+      load_connected_weights(*(l.wi), fp, transpose);
+      load_connected_weights(*(l.wg), fp, transpose);
+      load_connected_weights(*(l.wo), fp, transpose);
+      load_connected_weights(*(l.uf), fp, transpose);
+      load_connected_weights(*(l.ui), fp, transpose);
+      load_connected_weights(*(l.ug), fp, transpose);
+      load_connected_weights(*(l.uo), fp, transpose);
+    }
+    if (l.type == CONV_LSTM) {
+      if (l.peephole) {
+        load_convolutional_weights(*(l.vf), fp);
+        load_convolutional_weights(*(l.vi), fp);
+        load_convolutional_weights(*(l.vo), fp);
       }
+      load_convolutional_weights(*(l.wf), fp);
+      if (!l.bottleneck) {
+        load_convolutional_weights(*(l.wi), fp);
+        load_convolutional_weights(*(l.wg), fp);
+        load_convolutional_weights(*(l.wo), fp);
+      }
+      load_convolutional_weights(*(l.uf), fp);
+      load_convolutional_weights(*(l.ui), fp);
+      load_convolutional_weights(*(l.ug), fp);
+      load_convolutional_weights(*(l.uo), fp);
     }
     if (l.type == LOCAL) {
       int locations = l.out_w * l.out_h;
@@ -876,7 +874,9 @@ void load_weights_upto_subnet(network net, network &sub_net, char *filename,
       }
 #endif
     }
+    if (feof(fp))
+      break;
   }
-  fprintf(stderr, "Done!\n");
+  fprintf(stderr, "Done! Loaded %d layers from weights-file \n", i);
   fclose(fp);
 }

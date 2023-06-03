@@ -3,15 +3,17 @@ project(mountain_cpp)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
+
+
+
+
 set(Torch_DIR /home/wsl/src/libtorch/share/cmake/Torch)
 find_package(Torch REQUIRED)
 
 # set(CMAKE_C_COMPILER clang-16)
 # set(CMAKE_CXX_COMPILER clang++-16)
 # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-
-
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 
 # add_compile_options(-fcolor-diagnostics)
@@ -28,7 +30,6 @@ target_include_directories(data_packet PRIVATE src)
 target_link_libraries(data_packet PRIVATE "${TORCH_LIBRARIES}")
 
 add_library(partition_model src/partition_model.cpp)
-target_compile_definitions(partition_model PUBLIC GPU)
 target_include_directories(partition_model
                            PUBLIC src ${CMAKE_CURRENT_LIST_DIR}/darknet/src)
 target_link_libraries(
@@ -63,7 +64,7 @@ partition_model Darknet::dark)
 # set_property(TARGET worker PROPERTY CXX_STANDARD 14)
 
 add_executable(main src/main.cpp)
-target_compile_definitions(main PUBLIC GPU)
+
 target_include_directories(
   main PUBLIC ${CMAKE_CURRENT_LIST_DIR}/darknet/src
                ${CMAKE_CURRENT_LIST_DIR}/3rdparty/stb/include src)

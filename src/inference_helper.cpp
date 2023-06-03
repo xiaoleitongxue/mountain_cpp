@@ -69,7 +69,7 @@ float *flip_feature_map(int type, float *input, int w, int h, int c) {
   }
   return input;
 }
-void flip_sub_nets_weghts(std::vector<std::vector<network>> sub_nets, int stages,
+void flip_sub_nets_weights(std::vector<std::vector<network>> &sub_nets, int stages,
                           std::vector<partition_parameter> partition_params,
                           std::vector<ftp_parameter> ftp_params) {
   for (int i = 0; i < stages; ++i) {
@@ -80,6 +80,7 @@ void flip_sub_nets_weghts(std::vector<std::vector<network>> sub_nets, int stages
         if (l.type == CONVOLUTIONAL) {
           for (int p = 0; p < l.c / l.groups; ++p) {
             int offset = p * l.size * l.size * l.n;
+            // flip cpu weights
             flip_feature_map(j, l.weights + offset, l.size, l.size, l.n);
           }
 #ifdef GPU
