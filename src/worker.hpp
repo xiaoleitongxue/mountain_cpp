@@ -1,12 +1,20 @@
 #ifndef WORKER_HPP_LLL
 #define WORKER_HPP_LLL
+
+#include <ATen/core/TensorBody.h>
+#include <ATen/ops/from_blob.h>
+#include <ATen/ops/rand.h>
+#include <ATen/ops/tensor.h>
+#include <arpa/inet.h>
+#include <c10/core/DeviceType.h>
+#include <c10/util/Load.h>
+#include <torch/serialize/input-archive.h>
+#include <torch/torch.h>
 #include <data_packet.hpp>
+
 #include "partition_model.hpp"
 #include "yolo_v2_class.hpp"
 #include <mutex>
-#include <torch/serialize/input-archive.h>
-#include <torch/torch.h>
-
 
 
 class Compare {
@@ -49,6 +57,7 @@ private:
   network m_last_stage_net;
   int m_frames;
   int m_stages;
+  std::vector<torch::Tensor> correct_tensor;
   // mutex for thread synchronization
   std::mutex m_prio_task_queue_mutex;
   std::mutex m_prio_image_queue_mutex;
@@ -68,7 +77,7 @@ private:
   std::vector<ftp_parameter> m_ftp_params;
   std::vector<server_address> m_server_addresses;
   std::vector<std::vector<network>> m_sub_nets;
-  
+
   std::thread m_pritition_image_thread;
   std::thread m_merge_partitions_thread;
   std::thread m_inference_thread;
@@ -76,15 +85,17 @@ private:
   std::thread m_push_image_thread;
 
 public:
-  Master(std::string ip, int port, network net, network last_stage_net,
-         int frames, std::vector<partition_parameter> partition_params,
+  Master(std::string ip, int port, network net, int stages,
+         network last_stage_net, int frames,
+         std::vector<partition_parameter> partition_params,
          std::vector<ftp_parameter> ftp_params,
-         std::vector<server_address> server_addresses, std::vector<std::vector<network>> sub_nets);
+         std::vector<server_address> server_addresses,
+         std::vector<std::vector<network>> sub_nets);
   void m_pritition_image();
   void m_merge_partitions();
   void m_inference();
   int m_send_data_packet();
-  void m_push_image(std::string image_path_);
+  void m_push_image();
   static LIB_API image_t load_image(std::string image_filename);
 };
 

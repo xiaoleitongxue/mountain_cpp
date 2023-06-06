@@ -1,14 +1,11 @@
-#include <unistd.h>
 #include <worker.hpp>
-#include <cuda_runtime.h>
 #include "inference_helper.hpp"
+#include <cuda_runtime.h>
 #include <iostream>
 #include <parse_launch_config.hpp>
 #include <string>
 #include <thread>
-// #include <torch/torch.h>
-// #include <darknet.h>
-
+#include <unistd.h>
 int main(int argc, char *argv[]) {
   std::string launch_json = argv[1];
   // prase json
@@ -34,12 +31,12 @@ int main(int argc, char *argv[]) {
   flip_sub_nets_weights(sub_nets, launch_param.stages,
                         launch_param.partition_params, ftp_params);
 
- 
   std::string worker_type = argv[2];
   if (worker_type == "master") {
     Master master = Master{launch_param.master_addr.ip,
                            launch_param.master_addr.port,
                            net,
+                           launch_param.stages,
                            sub_nets[launch_param.stages - 1][0],
                            launch_param.frames,
                            launch_param.partition_params,
@@ -47,24 +44,23 @@ int main(int argc, char *argv[]) {
                            launch_param.worker_addr,
                            sub_nets};
 
-    master.m_push_image(launch_param.filename);
-    master.m_pritition_image();
-    std::thread send_data_packet_thread(&Master::m_send_data_packet, &master);
-    sleep(5);
-    master.m_merge_partitions();
-    master.m_inference();
-    // start worker thread
-    // std::thread push_image_thread(&Master::m_push_image, &master);
-    // std::thread partition_image_thread(&Master::m_pritition_image, &master);
-    // std::thread send_data_packet_thread(&Master::m_send_data_packet,
-    // &master); std::thread merge_partition_thread(&Master::m_merge_partitions,
-    // &master); std::thread inference_thread(&Master::m_inference, &master);
+    // master.m_push_image(launch_param.filename);
+    // master.m_pritition_image();
+    // // std::thread send_data_packet_thread(&Master::m_send_data_packet,
+    // &master); sleep(5); master.m_merge_partitions();
 
-    // push_image_thread.join();
-    // partition_image_thread.join();
-    // merge_partition_thread.join();
-    // inference_thread.join();
-    // send_data_packet_thread.join();
+    // start worker thread
+    std::thread push_image_thread(&Master::m_push_image, &master);
+    std::thread partition_image_thread(&Master::m_pritition_image, &master);
+    std::thread send_data_packet_thread(&Master::m_send_data_packet, &master);
+    std::thread merge_partition_thread(&Master::m_merge_partitions, &master);
+    //std::thread inference_thread(&Master::m_inference, &master);
+    master.m_inference();
+    push_image_thread.join();
+    partition_image_thread.join();
+    merge_partition_thread.join();
+    //inference_thread.join();
+    send_data_packet_thread.join();
 
   } else if (worker_type == "worker") {
     // create worker object

@@ -1,72 +1,13 @@
 #ifndef PARTITION_MODEL_HPP
 #define PARTITION_MODEL_HPP
-#include "darknet.h"
-#include <system_error>
-#include <vector>
-#include "network.h"
-extern "C" {
-#include "activation_layer.h"
-#include "activations.h"
-#include "assert.h"
-#include "avgpool_layer.h"
-#include "batchnorm_layer.h"
-#include "blas.h"
-#include "connected_layer.h"
-#include "conv_lstm_layer.h"
-#include "convolutional_layer.h"
-#include "cost_layer.h"
-#include "crnn_layer.h"
-#include "crop_layer.h"
-#include "data.h"
-#include "detection_layer.h"
-#include "dropout_layer.h"
-#include "gaussian_yolo_layer.h"
-#include "gru_layer.h"
-#include "list.h"
-#include "local_layer.h"
-#include "lstm_layer.h"
-#include "maxpool_layer.h"
-#include "normalization_layer.h"
-#include "option_list.h"
-#include "parser.h"
-#include "region_layer.h"
-#include "reorg_layer.h"
-#include "reorg_old_layer.h"
-#include "representation_layer.h"
-#include "rnn_layer.h"
-#include "route_layer.h"
-#include "sam_layer.h"
-#include "scale_channels_layer.h"
-#include "shortcut_layer.h"
-#include "softmax_layer.h"
-#include "upsample_layer.h"
-#include "utils.h"
-// #include "version.h"
-#include "yolo_layer.h"
-}
-
-// #include "stb_image.h"
+#include <darknet_include.hpp>
 
 typedef struct server_address {
   std::string ip;
   int port;
 } server_address;
 
-typedef struct {
-  char *type;
-  list *options;
-} section;
-typedef struct size_params {
-  int batch;
-  int inputs;
-  int h;
-  int w;
-  int c;
-  int index;
-  int time_steps;
-  int train;
-  network net;
-} size_params;
+
 
 
 typedef struct partition_parameter {

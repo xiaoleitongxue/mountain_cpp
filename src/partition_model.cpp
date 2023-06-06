@@ -1,4 +1,3 @@
-
 #include "parser.h"
 #include <cstdlib>
 #include <cstring>
@@ -7,69 +6,7 @@
 #include <partition_model.hpp>
 #include <string>
 #include <vector>
-extern "C" LIB_API {
-  void empty_func(dropout_layer l, network_state state);
-  list *read_cfg(char *filename);
-  LAYER_TYPE string_to_layer_type(char *type);
-  void free_section(section * s);
-  void parse_data(char *data, float *a, int n);
-  struct size_params;
-  local_layer parse_local(list * options, size_params params);
-  convolutional_layer parse_convolutional(list * options, size_params params);
-  layer parse_crnn(list * options, size_params params);
-  layer parse_rnn(list * options, size_params params);
-  layer parse_gru(list * options, size_params params);
-  layer parse_lstm(list * options, size_params params);
-  layer parse_conv_lstm(list * options, size_params params);
-  layer parse_history(list * options, size_params params);
-  connected_layer parse_connected(list * options, size_params params);
-  softmax_layer parse_softmax(list * options, size_params params);
-  contrastive_layer parse_contrastive(list * options, size_params params);
-  int *parse_yolo_mask(char *a, int *num);
-  float *get_classes_multipliers(char *cpc, const int classes,
-                                 const float max_delta);
-  layer parse_yolo(list * options, size_params params);
-  int *parse_gaussian_yolo_mask(char *a, int *num);
-  layer parse_gaussian_yolo(list * options, size_params params);
-  layer parse_region(list * options, size_params params);
-  detection_layer parse_detection(list * options, size_params params);
-  cost_layer parse_cost(list * options, size_params params);
-  crop_layer parse_crop(list * options, size_params params);
-  layer parse_reorg(list * options, size_params params);
-  layer parse_reorg_old(list * options, size_params params);
-  maxpool_layer parse_local_avgpool(list * options, size_params params);
-  maxpool_layer parse_maxpool(list * options, size_params params);
-  avgpool_layer parse_avgpool(list * options, size_params params);
-  dropout_layer parse_dropout(list * options, size_params params);
-  layer parse_normalization(list * options, size_params params);
-  layer parse_batchnorm(list * options, size_params params);
-  layer parse_shortcut(list * options, size_params params, network net);
-  layer parse_scale_channels(list * options, size_params params, network net);
-  layer parse_sam(list * options, size_params params, network net);
-  layer parse_implicit(list * options, size_params params, network net);
-  layer parse_activation(list * options, size_params params);
-  layer parse_upsample(list * options, size_params params, network net);
-  route_layer parse_route(list * options, size_params params);
-  learning_rate_policy get_policy(char *s);
-  void parse_net_options(list * options, network * net);
-  int is_network(section * s);
-  void set_train_only_bn(network net);
-  list *read_cfg(char *filename);
-  void save_convolutional_weights_binary(layer l, FILE * fp);
-  void save_shortcut_weights(layer l, FILE * fp);
-  void save_implicit_weights(layer l, FILE * fp);
-  void save_convolutional_weights(layer l, FILE * fp);
-  void save_convolutional_weights_ema(layer l, FILE * fp);
-  void save_batchnorm_weights(layer l, FILE * fp);
-  void save_connected_weights(layer l, FILE * fp);
-  void transpose_matrix(float *a, int rows, int cols);
-  void load_connected_weights(layer l, FILE * fp, int transpose);
-  void load_batchnorm_weights(layer l, FILE * fp);
-  void load_convolutional_weights_binary(layer l, FILE * fp);
-  void load_convolutional_weights(layer l, FILE * fp);
-  void load_shortcut_weights(layer l, FILE * fp);
-  void load_implicit_weights(layer l, FILE * fp);
-}
+
 void grid(network net, ftp_parameter &ftp_para, int partition_w,
           int partition_h, int from, int to) {
 
@@ -113,12 +50,13 @@ void grid(network net, ftp_parameter &ftp_para, int partition_w,
 
 tile_region traversal(tile_region &output, int i, network net) {
   tile_region input;
-  int stride = net.layers[i].stride;
-  int filter_size = net.layers[i].size;
-  int w = net.layers[i].w;
-  int h = net.layers[i].h;
-  int c = net.layers[i].c;
-  if (net.layers[i].type == CONVOLUTIONAL) {
+  layer l = net.layers[i];
+  int stride = l.stride;
+  int filter_size = l.size;
+  int w = l.w;
+  int h = l.h;
+  int c = l.c;
+  if (l.type == CONVOLUTIONAL) {
     input.w1 = (output.w1 * stride - filter_size / 2) > 0
                    ? (output.w1 * stride - filter_size / 2)
                    : 0;
@@ -132,10 +70,22 @@ tile_region traversal(tile_region &output, int i, network net) {
                    ? (output.h2 * stride + filter_size / 2)
                    : (h - 1);
   } else if (net.layers[i].type == MAXPOOL) {
-    input.w1 = output.w1 * stride;
-    input.w2 = output.w2 * stride + stride - 1;
-    input.h1 = output.h1 * stride;
-    input.h2 = output.h2 * stride + stride - 1;
+    if (stride == filter_size) {
+      input.w1 = output.w1 * stride;
+      input.w2 = output.w2 * stride + filter_size - 1;
+      input.h1 = output.h1 * stride;
+      input.h2 = output.h2 * stride + filter_size - 1;
+    } else {
+      input.w1 = (output.w1 * stride) > 0 ? (output.w1 * stride) : 0;
+      input.w2 = (output.w2 * stride + filter_size - 1 ) < (w - 1)
+                     ? (output.w2 * stride + filter_size - 1 )
+                     : (w - 1);
+      input.h1 =
+          (output.h1 * stride) > 0 ? (output.h1 * stride) : 0;
+      input.h2 = (output.h2 * stride + filter_size - 1) < (h - 1)
+                     ? ((output.h2 * stride + filter_size - 1))
+                     : (h - 1);
+    }
   }
   input.w = input.w2 - input.w1 + 1;
   input.h = input.h2 - input.h1 + 1;
@@ -333,8 +283,21 @@ network parse_network_cfg_custom_whc(char *filename,
   fprintf(
       stderr,
       "   layer   filters  size/strd(dil)      input                output\n");
-  while (n && fused_layers < net.n) {
-    fused_layers++;
+
+  int start_layer_index = partition_param.from;
+
+  int end_layer_index = partition_param.to;
+
+  int layer_index = 0;
+  while (n) {
+    if (layer_index < start_layer_index || layer_index > end_layer_index) {
+      s = (section *)n->val;
+      free_section(s);
+      n = n->next;
+      layer_index++;
+      continue;
+    }
+    layer_index++;
     params.train = old_params_train;
     if (count < last_stop_backward)
       params.train = 0;
@@ -745,9 +708,8 @@ void load_sub_nets_weights(std::vector<std::vector<network>> &sub_nets,
   network net = parse_network_cfg_custom(cfg_file, 1, 1);
   for (int i = 0; i < stages; ++i) {
     for (int j = 0; j < partition_params[i].partitions; ++j) {
-      load_weights_upto_subnet(&net, &sub_nets[i][j], weights, 
-                               partition_params[i].to,
-                               partition_params[i].from,
+      load_weights_upto_subnet(&net, &sub_nets[i][j], weights,
+                               partition_params[i].to, partition_params[i].from,
                                partition_params[i].to);
       // load_weights(&sub_nets[i][j], weights);
     }
@@ -755,8 +717,8 @@ void load_sub_nets_weights(std::vector<std::vector<network>> &sub_nets,
   free_network(net);
 }
 
-void load_weights_upto_subnet(network *net, network *sub_net, char *filename, int cutoff, int start_layer,
-                              int end_layer) {
+void load_weights_upto_subnet(network *net, network *sub_net, char *filename,
+                              int cutoff, int start_layer, int end_layer) {
 #ifdef GPU
   if (net->gpu_index >= 0) {
     cuda_set_device(net->gpu_index);
@@ -782,11 +744,13 @@ void load_weights_upto_subnet(network *net, network *sub_net, char *filename, in
     uint64_t iseen = 0;
     fread(&iseen, sizeof(uint64_t), 1, fp);
     *net->seen = iseen;
+    *sub_net->seen = iseen;
   } else {
     printf("\n seen 32");
     uint32_t iseen = 0;
     fread(&iseen, sizeof(uint32_t), 1, fp);
     *net->seen = iseen;
+    *sub_net->seen = iseen;
   }
   *net->cur_iteration = get_current_batch(*net);
   printf(", trained: %.0f K-images (%.0f Kilo-batches_64) \n",
@@ -794,7 +758,7 @@ void load_weights_upto_subnet(network *net, network *sub_net, char *filename, in
   int transpose = (major > 1000) || (minor > 1000);
 
   int i;
-  for (i = 0; i >= start_layer && i < net->n && i <= cutoff; ++i) {
+  for (i = 0; i < net->n; ++i) {
     layer l;
     if (i >= start_layer && i <= end_layer) {
       l = sub_net->layers[i - start_layer];

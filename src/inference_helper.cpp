@@ -1,5 +1,4 @@
 #include <inference_helper.hpp>
-#include "darknet.h"
 float *fliplr_feature_map(float *input, int w, int h, int c) {
   for (int i = 0; i < c; ++i) {
     // 行内翻转
@@ -69,9 +68,10 @@ float *flip_feature_map(int type, float *input, int w, int h, int c) {
   }
   return input;
 }
-void flip_sub_nets_weights(std::vector<std::vector<network>> &sub_nets, int stages,
-                          std::vector<partition_parameter> partition_params,
-                          std::vector<ftp_parameter> ftp_params) {
+void flip_sub_nets_weights(std::vector<std::vector<network>> &sub_nets,
+                           int stages,
+                           std::vector<partition_parameter> partition_params,
+                           std::vector<ftp_parameter> ftp_params) {
   for (int i = 0; i < stages; ++i) {
     for (int j = 0; j < partition_params[i].partitions; ++j) {
       network sub_net = sub_nets[i][j];
@@ -83,6 +83,7 @@ void flip_sub_nets_weights(std::vector<std::vector<network>> &sub_nets, int stag
             // flip cpu weights
             flip_feature_map(j, l.weights + offset, l.size, l.size, l.n);
           }
+
 #ifdef GPU
           if (gpu_index >= 0) {
             push_convolutional_layer(l);

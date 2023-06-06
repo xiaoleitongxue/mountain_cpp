@@ -1,15 +1,10 @@
 #include "data_packet.hpp"
-#include "partition_model.hpp"
-#include <ATen/TensorIndexing.h>
-#include <ATen/core/TensorBody.h>
-#include <ATen/ops/from_blob.h>
-#include <ATen/ops/rand.h>
-#include <ATen/ops/tensor.h>
-#include <arpa/inet.h>
-#include <c10/core/DeviceType.h>
-#include <c10/util/Load.h>
-#include <darknet.h>
+#include <iostream>
 #include <worker.hpp>
+
+#include <cassert>
+#include <darknet.h>
+#include <string>
 
 #include "stb_image.h"
 #include <future>
@@ -96,7 +91,7 @@ void Worker::m_inference() {
                           net.layers[net.n - 1].out_h,
                           net.layers[net.n - 1].out_w};
 
-    torch::Tensor tensor = torch::from_blob(out, s);
+    torch::Tensor tensor = torch::from_blob(out, s).clone();
     std::cout << net.layers[net.n - 1].out_c << " "
               << net.layers[net.n - 1].out_h << " "
               << net.layers[net.n - 1].out_w << std::endl;
@@ -229,8 +224,9 @@ int Worker::m_receive_data_packet() {
   return 0;
 }
 
-Master::Master(std::string ip, int port, network net, network last_stage_net,
-               int frames, std::vector<partition_parameter> partition_params,
+Master::Master(std::string ip, int port, network net, int stages,
+               network last_stage_net, int frames,
+               std::vector<partition_parameter> partition_params,
                std::vector<ftp_parameter> ftp_params,
                std::vector<server_address> server_addresses,
                std::vector<std::vector<network>> sub_nets)
@@ -245,6 +241,7 @@ Master::Master(std::string ip, int port, network net, network last_stage_net,
   m_ftp_params = ftp_params;
   m_server_addresses = server_addresses;
   m_sub_nets = sub_nets;
+  m_stages = stages;
 }
 
 LIB_API image_t Master::load_image(std::string image_filename) {
@@ -260,8 +257,8 @@ LIB_API image_t Master::load_image(std::string image_filename) {
   return img;
 }
 
-void Master::m_push_image(std::string image_path_) {
-  std::string image_path = image_path_;
+void Master::m_push_image() {
+  std::string image_path = "./data/dog.jpg";
   for (int i = 0; i < m_frames; ++i) {
     auto img = load_image(image_path);
     image im;
@@ -288,17 +285,22 @@ void Master::m_push_image(std::string image_path_) {
     // push image to queue
     std::unique_lock<std::mutex> lock(m_prio_image_queue_mutex);
     m_prio_image_queue.push(data_packet);
+    network_predict(m_net, sized.data);
+    for (int k = 0; k < m_net.n; ++k) {
+      layer l = m_net.layers[k];
+      if (l.type != REGION && l.type != YOLO && (*m_net.cuda_graph_ready) == 0)
+        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+    }
   }
 }
 
 void Master::m_pritition_image() {
-  int frame_counts = 0;
-  while (frame_counts < m_frames) {
+  
+  while (1) {
     std::unique_lock<std::mutex> lock(m_prio_image_queue_mutex);
     if (m_prio_image_queue.empty()) {
       continue;
     }
-    frame_counts++;
     Data_packet data_packet = m_prio_image_queue.top();
     m_prio_image_queue.pop();
     lock.unlock();
@@ -314,10 +316,14 @@ void Master::m_pritition_image() {
         int dh2 = m_ftp_params[stage].input_tiles[task_id][0].h2;
         int c = m_ftp_params[stage].input_tiles[task_id][0].c;
         // crop
-        torch::Tensor partition = data_packet.tensor.index(
-            {at::indexing::Slice(0, c), at::indexing::Slice(dh1, dh2 + 1),
-             at::indexing::Slice(dw1, dw2 + 1)});
+        torch::Tensor partition =
+            data_packet.tensor
+                .index({at::indexing::Slice(0, c),
+                        at::indexing::Slice(dh1, dh2 + 1),
+                        at::indexing::Slice(dw1, dw2 + 1)})
+                .clone();
         // flip
+
         assert(partition.sizes()[0] == c);
         assert(partition.sizes()[1] == dh2 - dh1 + 1);
         assert(partition.sizes()[2] == dw2 - dw1 + 1);
@@ -328,14 +334,14 @@ void Master::m_pritition_image() {
           break;
         case 1:
           // flip lr
-          fliped_partition = partition.flip(2);
+          fliped_partition = partition.flip(2).clone();
           break;
         case 2:
           // flip ud
-          fliped_partition = partition.flip(1);
+          fliped_partition = partition.flip(1).clone();
           break;
         case 3:
-          fliped_partition = partition.flip({1, 2});
+          fliped_partition = partition.flip({1, 2}).clone();
           break;
         }
 
@@ -352,21 +358,31 @@ void Master::m_pritition_image() {
         std::unique_lock<std::mutex> lock1(m_prio_task_queue_mutex);
         m_prio_task_queue.push(new_data_packet);
         lock1.unlock();
-        float *X = data_packet.tensor.data_ptr<float>();
-        float * out;
-        std::vector<network> test;
-        test.push_back(m_net);
-        float *out1 = network_predict(test[0], X);
-        float *out2 = network_predict(m_sub_nets[0][0], X);
 
+        // float *X2 = new_data_packet.tensor.data_ptr<float>();
+        // // for(int k = 0; k < (dw2 - dw1 + 1) * (dh2 - dh1 + 1) * c; ++k){
+        // //   assert(*(X1 + k) == *(X2 + k));
+        // // }
+        // network_predict(m_net, X1);
+        // for (int k = 0; k < m_net.n; ++k) {
+        //   layer l = m_net.layers[k];
+        //   if (l.type != REGION && l.type != YOLO &&
+        //       (*m_net.cuda_graph_ready) == 0)
+        //     cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+        //   std::cout << k << " " << *l.output << std::endl;
+        // }
+
+        // float *out2 = network_predict(m_sub_nets[0][0], X1);
+        // float *out3 = network_predict(m_sub_nets[0][0], X2);
+        // std::cout << *out2 << "," << *out3 << std::endl;
       }
     }
   }
 }
 
 void Master::m_merge_partitions() {
-  int frame_counts = 0;
-  while (frame_counts < m_frames) {
+
+  while (1) {
     int counts = 0;
     std::unique_lock<std::mutex> lock(m_prio_partition_inference_result_mutex);
     if (m_prio_partition_inference_result_queue.empty()) {
@@ -427,8 +443,10 @@ void Master::m_merge_partitions() {
       // create merged image
 
       torch::Tensor cropped_partition =
-          partition.index({at::indexing::Slice(0, c), at::indexing::Slice(0, h),
-                           at::indexing::Slice(0, w)});
+          partition
+              .index({at::indexing::Slice(0, c), at::indexing::Slice(0, h),
+                      at::indexing::Slice(0, w)})
+              .clone();
       // flip data
       assert(cropped_partition.sizes()[0] == c);
       assert(cropped_partition.sizes()[1] == h);
@@ -450,12 +468,9 @@ void Master::m_merge_partitions() {
         fliped_cropped_partition = cropped_partition.flip({1, 2});
         break;
       }
-      assert(cropped_partition.sizes()[0] == c);
-      assert(cropped_partition.sizes()[1] == dh2 - dh1 + 1);
-      assert(cropped_partition.sizes()[2] == dw2 - dw1 + 1);
-      int ch = merged.sizes()[0];
-      int hi = merged.sizes()[1];
-      int wi = merged.sizes()[2];
+      // assert(cropped_partition.sizes()[0] == c);
+      // assert(cropped_partition.sizes()[1] == dh2 - dh1 + 1);
+      // assert(cropped_partition.sizes()[2] == dw2 - dw1 + 1);
 
       // stitch partition to original image
       merged.index({at::indexing::Slice(0, c),
@@ -473,14 +488,13 @@ void Master::m_merge_partitions() {
                                 m_net.layers[to].out_c,
                                 0,
                                 merged};
-    if (stage < m_stages - 1) {
+    if (stage + 1 != m_stages - 1) {
       std::unique_lock<std::mutex> lock1(m_prio_image_queue_mutex);
       m_prio_image_queue.push(new_data_packet);
     } else {
       std::unique_lock<std::mutex> lock1(m_prio_merged_result_mutex);
       m_prio_merged_result_queue.push(new_data_packet);
     }
-    frame_counts++;
   }
 }
 
@@ -607,41 +621,47 @@ void Master::m_inference() {
     if (m_prio_merged_result_queue.empty()) {
       continue;
     }
+
     Data_packet data_packet = m_prio_merged_result_queue.top();
     m_prio_merged_result_queue.pop();
     lock.unlock();
-    // convert tensor to array
-
     float *X = data_packet.tensor.data_ptr<float>();
+    // layer merged_layer =
+    //     m_net.layers[m_partition_params[data_packet.stage - 1].to];
+    // for (int i = 0; i < data_packet.h; ++i) {
+    //   for (int j = 0; j < data_packet.w; ++j) {
+    //     std::string a_ = std::to_string(
+    //         *(m_net.layers[m_partition_params[data_packet.stage - 1].to - 1]
+    //               .output +
+    //           i * data_packet.w + j));
+    //     std::cout << a_ << " ";
+    //   }
+    //   std::cout << std::endl;
+    // }
+    // std::cout << std::endl << std::endl;
+    // for (int i = 0; i < data_packet.h; ++i) {
+    //   for (int j = 0; j < data_packet.w; ++j) {
+    //     std::string a_ = std::to_string(*(
+    //         m_net.layers[m_partition_params[data_packet.stage - 1].to].output +
+    //         i * data_packet.w + j));
+    //     std::cout << a_ << " ";
+    //   }
+    //   std::cout << std::endl;
+    // }
+
     float *out = network_predict(m_last_stage_net, X);
     layer l = m_last_stage_net.layers[m_last_stage_net.n - 1];
     assert(data_packet.tensor.sizes()[0] == m_last_stage_net.c);
     assert(data_packet.tensor.sizes()[1] == m_last_stage_net.h);
     assert(data_packet.tensor.sizes()[2] == m_last_stage_net.w);
-    for (int i = 0; i < l.out_c * l.out_w * l.out_h; ++i) {
-      std::cout << *(out + i) << " ";
+
+    for (int i = 0; i < l.out_w * l.out_h * l.out_c; ++i) {
+      std::string a = std::to_string(*(m_net.layers[m_net.n - 1].output + i));
+      std::string b = std::to_string(*(out + i));
+      std::cout << a << " " + std::to_string(i) + " " << b << std::endl;
+      assert(a.substr(0, 4) == b.substr(0, 4));
     }
-    // assert(*out == 0.232374);
-    // convert array to torch::Tensor
-    // c10::IntArrayRef s = {
-    //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_c,
-    //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_h,
-    //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_w};
 
-    // torch::Tensor tensor = torch::from_blob(out, s);
-
-    // // // create Data_packet
-    // // Data_packet new_data_packet{
-    // //     data_packet.frame_seq,
-    // //     data_packet.task_id,
-    // //     data_packet.stage,
-    // //     data_packet.from,
-    // //     data_packet.to,
-    // //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_w,
-    // //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_h,
-    // //     m_last_stage_net.layers[m_last_stage_net.n - 1].out_c,
-    // //     0,
-    // //     tensor};
     auto img = load_image("./data/dog.jpg");
     image im;
     im.c = img.c;
@@ -657,14 +677,14 @@ void Master::m_inference() {
     } else
       sized = resize_image(im, m_net.w, m_net.h);
 
-    l = m_net.layers[m_net.n - 1];
+    l = m_last_stage_net.layers[m_last_stage_net.n - 1];
     float thresh = 0.5;
     int nboxes = 0;
     int letterbox = 0;
     float hier_thresh = 0.5;
     float nms = .4;
-    detection *dets = get_network_boxes(&m_net, im.w, im.h, thresh, hier_thresh,
-                                        0, 1, &nboxes, letterbox);
+    detection *dets = get_network_boxes(&m_last_stage_net, im.w, im.h, thresh,
+                                        hier_thresh, 0, 1, &nboxes, letterbox);
     if (nms)
       do_nms_sort(dets, nboxes, l.classes, nms);
 
@@ -703,7 +723,7 @@ void Master::m_inference() {
     // #endif
     std::vector<bbox_t> result_vec = bbox_vec;
     free(img.data);
-    auto obj_names = objects_names_from_file("data/coco.names");
+    auto obj_names = objects_names_from_file("./data/coco.names");
     show_console_result(result_vec, obj_names, 0);
   }
 }
