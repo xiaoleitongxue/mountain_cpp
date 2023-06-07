@@ -15,9 +15,25 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Worker",
+            "name": "Worker_0",
             "program": "${workspaceFolder}/build/main",
             "args": ["/home/wsl/src/mountain_cpp/launch_json/launch.json", "worker", "0"],
+            "cwd": "${workspaceFolder}/darknet"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Worker_1",
+            "program": "${workspaceFolder}/build/main",
+            "args": ["/home/wsl/src/mountain_cpp/launch_json/launch.json", "worker", "1"],
+            "cwd": "${workspaceFolder}/darknet"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Worker_2",
+            "program": "${workspaceFolder}/build/main",
+            "args": ["/home/wsl/src/mountain_cpp/launch_json/launch.json", "worker", "2"],
             "cwd": "${workspaceFolder}/darknet"
         }
     ]

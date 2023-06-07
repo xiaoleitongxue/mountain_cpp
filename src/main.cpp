@@ -1,11 +1,18 @@
 #include <worker.hpp>
 #include "inference_helper.hpp"
+#include <chrono>
 #include <cuda_runtime.h>
 #include <iostream>
 #include <parse_launch_config.hpp>
 #include <string>
 #include <thread>
 #include <unistd.h>
+#include <chrono>
+using namespace std;
+using namespace std::chrono;
+std::vector<std::pair<std::chrono::high_resolution_clock::time_point,
+                      std::chrono::high_resolution_clock::time_point>>
+    frame_time_point;
 int main(int argc, char *argv[]) {
   std::string launch_json = argv[1];
   // prase json
@@ -30,7 +37,8 @@ int main(int argc, char *argv[]) {
   // flip weights
   flip_sub_nets_weights(sub_nets, launch_param.stages,
                         launch_param.partition_params, ftp_params);
-
+  frame_time_point = std::vector<std::pair<std::chrono::high_resolution_clock::time_point,
+                      std::chrono::high_resolution_clock::time_point>>(100);
   std::string worker_type = argv[2];
   if (worker_type == "master") {
     Master master = Master{launch_param.master_addr.ip,
@@ -52,30 +60,43 @@ int main(int argc, char *argv[]) {
     // start worker thread
     std::thread push_image_thread(&Master::m_push_image, &master);
     std::thread partition_image_thread(&Master::m_pritition_image, &master);
+    std::thread inference_thread(&Master::m_inference, &master);
     std::thread send_data_packet_thread(&Master::m_send_data_packet, &master);
+    std::thread recv_data_packet_thread(&Master::m_recv_data_packet, &master);
     std::thread merge_partition_thread(&Master::m_merge_partitions, &master);
-    //std::thread inference_thread(&Master::m_inference, &master);
-    master.m_inference();
+
     push_image_thread.join();
     partition_image_thread.join();
     merge_partition_thread.join();
-    //inference_thread.join();
+    inference_thread.join();
     send_data_packet_thread.join();
+    
+
+    for (int i = 0; i < launch_param.frames; ++i) {
+      auto diff =
+          duration_cast<std::chrono::milliseconds> (frame_time_point[i].second -
+          frame_time_point[i].first);
+      std::cout << "frame Time " << i << " " << diff.count() << " milliseconds" << std::endl;
+    }
+    recv_data_packet_thread.join();
+
+    // inform worker to termial
 
   } else if (worker_type == "worker") {
     // create worker object
     std::string worker_id = argv[3];
     int worker_id_ = std::stoi(worker_id);
     Worker worker = Worker{launch_param.worker_addr[worker_id_].ip,
-                           launch_param.worker_addr[worker_id_].port, sub_nets};
+                           launch_param.worker_addr[worker_id_].port, sub_nets,
+                           launch_param.master_addr};
     // worker.m_receive_data_packet();
     // start worker thread
-    std::thread receive_data_packet_thread(&Worker::m_receive_data_packet,
-                                           &worker);
-
+    std::thread recv_data_packet_thread(&Worker::m_recv_data_packet, &worker);
+    std::thread send_data_packet_thread(&Worker::m_send_data_packet, &worker);
     std::thread inference_thread(&Worker::m_inference, &worker);
 
     inference_thread.join();
-    receive_data_packet_thread.join();
+    recv_data_packet_thread.join();
+    send_data_packet_thread.join();
   }
 }
