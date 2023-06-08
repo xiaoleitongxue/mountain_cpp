@@ -1,9 +1,9 @@
 {
-  "cfg": "./cfg/yolov2-tiny.cfg",
-  "weights": "./yolov2-tiny.weights",
-  "filename": "./data/dog.jpg",
-  "workers": 1,
-  "frames": 300,
+  "cfg": "../yolov2-tiny.cfg",
+  "weights": "../yolov2-tiny.weights",
+  "filename": "../dog.jpg",
+  "workers": 2,
+  "frames": 100,
   "stages": 3,
   "partition_params": [
     {
@@ -38,6 +38,10 @@
     {
       "ip": "127.0.0.1",
       "port": 5556
+    },
+    {
+      "ip": "127.0.0.1",
+      "port": 5557
     }
   ]
 }

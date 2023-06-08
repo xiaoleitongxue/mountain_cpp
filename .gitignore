@@ -15,3 +15,5 @@ _deps
 *png
 .cache/
 build/
+libtorch/
+main

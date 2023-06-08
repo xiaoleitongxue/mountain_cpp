@@ -1,4 +1,5 @@
 #include "data_packet.hpp"
+#include <chrono>
 #include <iostream>
 #include <worker.hpp>
 
@@ -119,6 +120,7 @@ Worker::Worker(std::string ip, int port,
 
 void Worker::m_inference() {
   while (1) {
+
     std::unique_lock<std::mutex> lock1(m_prio_task_queue_mutex);
     if (m_prio_task_queue.empty()) {
       continue;
@@ -126,7 +128,7 @@ void Worker::m_inference() {
     Data_packet data_packet = m_prio_task_queue.top();
     m_prio_task_queue.pop();
     lock1.unlock();
-
+    auto start = std::chrono::high_resolution_clock::now();
     network net = m_sub_nets[data_packet.stage][data_packet.task_id];
     // assert(data_packet.tensor.sizes()[0] == net.c);
     // assert(data_packet.tensor.sizes()[1] == net.h);
@@ -167,6 +169,12 @@ void Worker::m_inference() {
     // push result to result queue
     std::unique_lock<std::mutex> lock2(m_prio_result_queue_mutex);
     m_prio_result_queue.push(new_data_packet);
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+
+    std::cout << "Time taken by function: " << duration.count()
+              << " milliseconds" << std::endl;
   }
 }
 int Worker::m_send_data_packet() {
@@ -198,6 +206,8 @@ int Worker::m_send_data_packet() {
     void *serialized_data_packet = serialize_data_packet(data_packet);
     send(sock, serialized_data_packet,
          data_packet.tensor_size + sizeof(int) * 9, 0);
+    // free buffer
+    delete[] (char *)serialized_data_packet;
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
   }
@@ -274,20 +284,12 @@ int Worker::m_recv_data_packet() {
           torch::load(tensor, stream_);
 
           // create Data_packet
-          Data_packet new_data_packet{data_packet.frame_seq,
-                                      data_packet.task_id,
-                                      data_packet.stage,
-                                      data_packet.from,
-                                      data_packet.to,
-                                      data_packet.w,
-                                      data_packet.h,
-                                      data_packet.c,
-                                      data_packet.w * data_packet.h *
-                                          data_packet.c,
-                                      tensor};
+          data_packet.tensor = tensor;
+
           std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
-          m_prio_task_queue.push(new_data_packet);
-          // printf("frame %d stage %d task_id %d recv\n", data_packet.frame_seq,
+          m_prio_task_queue.push(data_packet);
+          // printf("frame %d stage %d task_id %d recv\n",
+          // data_packet.frame_seq,
           //        data_packet.stage, data_packet.task_id);
           if (valread < 0) {
             close(i);
@@ -336,7 +338,7 @@ LIB_API image_t Master::load_image(std::string image_filename) {
 }
 
 void Master::m_push_image() {
-  std::string image_path = "./data/dog.jpg";
+  std::string image_path = "./dog.jpg";
   for (int i = 0; i < m_frames; ++i) {
     auto img = load_image(image_path);
     image im;
@@ -354,9 +356,9 @@ void Master::m_push_image() {
     c10::IntArrayRef s = {sized.c, sized.h, sized.w};
 
     torch::Tensor tensor = torch::from_blob(sized.data, s);
-    assert(tensor.sizes()[0] == sized.c);
-    assert(tensor.sizes()[1] == sized.h);
-    assert(tensor.sizes()[2] == sized.w);
+    // assert(tensor.sizes()[0] == sized.c);
+    // assert(tensor.sizes()[1] == sized.h);
+    // assert(tensor.sizes()[2] == sized.w);
     Data_packet data_packet{i,       0,       0,       0, 0,
                             sized.w, sized.h, sized.c, 0, tensor};
     // std::cout << *sized.data << std::endl;
@@ -410,9 +412,9 @@ void Master::m_pritition_image() {
                 .clone();
         // flip
 
-        assert(partition.sizes()[0] == c);
-        assert(partition.sizes()[1] == dh2 - dh1 + 1);
-        assert(partition.sizes()[2] == dw2 - dw1 + 1);
+        // assert(partition.sizes()[0] == c);
+        // assert(partition.sizes()[1] == dh2 - dh1 + 1);
+        // assert(partition.sizes()[2] == dw2 - dw1 + 1);
         torch::Tensor fliped_partition;
         switch (task_id) {
         case 0:
@@ -656,17 +658,14 @@ int Master::m_recv_data_packet() {
           torch::Tensor tensor;
           torch::load(tensor, stream_);
           // create Data_packet
-          Data_packet new_data_packet{
-              data_packet.frame_seq,   data_packet.task_id,
-              data_packet.stage,       data_packet.from,
-              data_packet.to,          data_packet.w,
-              data_packet.h,           data_packet.c,
-              data_packet.tensor_size, tensor};
+          data_packet.tensor = tensor;
+          
           // push to queue
           std::unique_lock<std::mutex> lock(
               m_prio_partition_inference_result_mutex);
-          m_prio_partition_inference_result_queue.push(new_data_packet);
-          // printf("frame %d stage %d task_id %d recv\n", data_packet.frame_seq,
+          m_prio_partition_inference_result_queue.push(data_packet);
+          // printf("frame %d stage %d task_id %d recv\n",
+          // data_packet.frame_seq,
           //        data_packet.stage, data_packet.task_id);
           if (valread < 0) {
             close(i);
