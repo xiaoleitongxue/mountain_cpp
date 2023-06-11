@@ -14,7 +14,8 @@
 #include <errno.h>
 #include <future>
 #include <mutex>
-extern "C" {
+extern "C"
+{
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -27,13 +28,15 @@ extern "C" {
 #include <unistd.h>
 }
 
-int make_socket(uint16_t port) {
+int make_socket(uint16_t port)
+{
   int sock;
   struct sockaddr_in name;
 
   /* Create the socket. */
   sock = socket(AF_INET, SOCK_STREAM, 0);
-  if (sock < 0) {
+  if (sock < 0)
+  {
     perror("socket");
     exit(EXIT_FAILURE);
   }
@@ -42,7 +45,8 @@ int make_socket(uint16_t port) {
   name.sin_family = AF_INET;
   name.sin_port = htons(port);
   name.sin_addr.s_addr = htonl(INADDR_ANY);
-  if (bind(sock, (struct sockaddr *)&name, sizeof(name)) < 0) {
+  if (bind(sock, (struct sockaddr *)&name, sizeof(name)) < 0)
+  {
     perror("bind");
     exit(EXIT_FAILURE);
   }
@@ -50,13 +54,15 @@ int make_socket(uint16_t port) {
   return sock;
 }
 
-void init_sockaddr(struct sockaddr_in *name, const char *hostname, int port) {
+void init_sockaddr(struct sockaddr_in *name, const char *hostname, int port)
+{
   struct hostent *hostinfo;
 
   name->sin_family = AF_INET;
   name->sin_port = htons(port);
   hostinfo = gethostbyname(hostname);
-  if (hostinfo == NULL) {
+  if (hostinfo == NULL)
+  {
     fprintf(stderr, "Unknown host %s.\n", hostname);
     exit(EXIT_FAILURE);
   }
@@ -65,10 +71,12 @@ void init_sockaddr(struct sockaddr_in *name, const char *hostname, int port) {
 
 void show_console_result(std::vector<bbox_t> const result_vec,
                          std::vector<std::string> const obj_names,
-                         int frame_id = -1) {
+                         int frame_id = -1)
+{
   if (frame_id >= 0)
     std::cout << " Frame: " << frame_id << std::endl;
-  for (auto &i : result_vec) {
+  for (auto &i : result_vec)
+  {
     if (obj_names.size() > i.obj_id)
       std::cout << obj_names[i.obj_id] << " - ";
     std::cout << "obj_id = " << i.obj_id << ",  x = " << i.x << ", y = " << i.y
@@ -77,7 +85,8 @@ void show_console_result(std::vector<bbox_t> const result_vec,
   }
 }
 
-std::vector<std::string> objects_names_from_file(std::string const filename) {
+std::vector<std::string> objects_names_from_file(std::string const filename)
+{
   std::ifstream file(filename);
   std::vector<std::string> file_lines;
   if (!file.is_open())
@@ -88,7 +97,8 @@ std::vector<std::string> objects_names_from_file(std::string const filename) {
   return file_lines;
 }
 
-static image load_image_stb(char *filename, int channels) {
+static image load_image_stb(char *filename, int channels)
+{
   int w, h, c;
   unsigned char *data = stbi_load(filename, &w, &h, &c, channels);
   if (!data)
@@ -97,9 +107,12 @@ static image load_image_stb(char *filename, int channels) {
     c = channels;
   int i, j, k;
   image im = make_image(w, h, c);
-  for (k = 0; k < c; ++k) {
-    for (j = 0; j < h; ++j) {
-      for (i = 0; i < w; ++i) {
+  for (k = 0; k < c; ++k)
+  {
+    for (j = 0; j < h; ++j)
+    {
+      for (i = 0; i < w; ++i)
+      {
         int dst_index = i + w * j + w * h * k;
         int src_index = k + c * i + c * w * j;
         im.data[dst_index] = (float)data[src_index] / 255.;
@@ -112,18 +125,22 @@ static image load_image_stb(char *filename, int channels) {
 
 Worker::Worker(std::string ip, int port,
                std::vector<std::vector<network>> sub_nets,
-               struct server_address master_addr) {
+               struct server_address master_addr)
+{
   m_ip = ip;
   m_port = port;
   m_sub_nets = sub_nets;
   m_master_addr = master_addr;
 }
 
-void Worker::m_inference() {
-  while (1) {
+void Worker::m_inference()
+{
+  while (1)
+  {
 
     std::unique_lock<std::mutex> lock1(m_prio_task_queue_mutex);
-    if (m_prio_task_queue.empty()) {
+    if (m_prio_task_queue.empty())
+    {
       continue;
     }
     Data_packet data_packet = m_prio_task_queue.top();
@@ -178,27 +195,33 @@ void Worker::m_inference() {
     //           << " milliseconds" << std::endl;
   }
 }
-int Worker::m_send_data_packet() {
+int Worker::m_send_data_packet()
+{
   int sock;
   struct sockaddr_in servername;
   /* Create the socket. */
   sock = socket(AF_INET, SOCK_STREAM, 0);
   init_sockaddr(&servername, m_master_addr.ip.c_str(), m_master_addr.port);
-  if (sock < 0) {
+  if (sock < 0)
+  {
     perror("socket (client)");
     exit(EXIT_FAILURE);
   }
   /* Connect to the server. */
-  while (1) {
-    if (0 > connect(sock, (struct sockaddr *)&servername, sizeof(servername))) {
+  while (1)
+  {
+    if (0 > connect(sock, (struct sockaddr *)&servername, sizeof(servername)))
+    {
       // perror("connect (client)");
       continue;
     }
     break;
   }
-  while (1) {
+  while (1)
+  {
     std::unique_lock<std::mutex> lock(m_prio_result_queue_mutex);
-    if (m_prio_result_queue.empty()) {
+    if (m_prio_result_queue.empty())
+    {
       continue;
     }
     Data_packet data_packet = m_prio_result_queue.top();
@@ -208,7 +231,7 @@ int Worker::m_send_data_packet() {
     send(sock, serialized_data_packet,
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // free buffer
-    delete[](char *) serialized_data_packet;
+    delete[] (char *)serialized_data_packet;
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
   }
@@ -217,7 +240,8 @@ int Worker::m_send_data_packet() {
 
   exit(EXIT_SUCCESS);
 }
-int Worker::m_recv_data_packet() {
+int Worker::m_recv_data_packet()
+{
   int sock;
   fd_set active_fd_set, read_fd_set;
   int i;
@@ -226,7 +250,8 @@ int Worker::m_recv_data_packet() {
 
   /* Create the socket and set it up to accept connections. */
   sock = make_socket(m_port);
-  if (listen(sock, 1) < 0) {
+  if (listen(sock, 1) < 0)
+  {
     perror("listen");
     exit(EXIT_FAILURE);
   }
@@ -235,24 +260,30 @@ int Worker::m_recv_data_packet() {
   FD_ZERO(&active_fd_set);
   FD_SET(sock, &active_fd_set);
 
-  while (1) {
+  while (1)
+  {
 
     /* Block until input arrives on one or more active sockets. */
     read_fd_set = active_fd_set;
-    if (select(FD_SETSIZE, &read_fd_set, NULL, NULL, NULL) < 0) {
+    if (select(FD_SETSIZE, &read_fd_set, NULL, NULL, NULL) < 0)
+    {
       perror("select");
       exit(EXIT_FAILURE);
     }
     /* Service all the sockets with input pending. */
-    for (i = 0; i < FD_SETSIZE; ++i) {
-      if (FD_ISSET(i, &read_fd_set)) {
-        if (i == sock) {
+    for (i = 0; i < FD_SETSIZE; ++i)
+    {
+      if (FD_ISSET(i, &read_fd_set))
+      {
+        if (i == sock)
+        {
           /* Connection request on original socket. */
           int new_sock;
           size = sizeof(clientname);
           new_sock =
               accept(sock, (struct sockaddr *)&clientname, (socklen_t *)&size);
-          if (new_sock < 0) {
+          if (new_sock < 0)
+          {
             perror("accept");
             exit(EXIT_FAILURE);
           }
@@ -261,7 +292,9 @@ int Worker::m_recv_data_packet() {
           //                            %hd.\n", inet_ntoa(clientname.sin_addr),
           //                            ntohs(clientname.sin_port));
           FD_SET(new_sock, &active_fd_set);
-        } else {
+        }
+        else
+        {
           /* Data arriving on an already-connected socket. */
           int metadata_buffer[9];
           Data_packet data_packet;
@@ -292,7 +325,8 @@ int Worker::m_recv_data_packet() {
           // printf("frame %d stage %d task_id %d recv\n",
           // data_packet.frame_seq,
           //        data_packet.stage, data_packet.task_id);
-          if (valread < 0) {
+          if (valread < 0)
+          {
             close(i);
             FD_CLR(i, &active_fd_set);
           }
@@ -304,28 +338,26 @@ int Worker::m_recv_data_packet() {
   return 0;
 }
 
-Master::Master(std::string ip, int port, network net, int stages,
+Master::Master(std::string ip, int port, int stages,
                network last_stage_net, int frames,
                std::vector<partition_parameter> partition_params,
                std::vector<ftp_parameter> ftp_params,
-               std::vector<server_address> server_addresses,
-               std::vector<std::vector<network>> sub_nets)
+               std::vector<server_address> server_addresses)
     : exit_flag(1)
 
 {
   m_ip = ip;
   m_port = port;
-  m_net = net;
   m_last_stage_net = last_stage_net;
   m_frames = frames;
   m_partition_params = partition_params;
   m_ftp_params = ftp_params;
   m_server_addresses = server_addresses;
-  m_sub_nets = sub_nets;
   m_stages = stages;
 }
 
-LIB_API image_t Master::load_image(std::string image_filename) {
+LIB_API image_t Master::load_image(std::string image_filename)
+{
   char *input = const_cast<char *>(image_filename.c_str());
   image im = load_image_stb(input, 3);
 
@@ -338,9 +370,14 @@ LIB_API image_t Master::load_image(std::string image_filename) {
   return img;
 }
 
-void Master::m_push_image() {
+void Master::m_push_image()
+{
   std::string image_path = "../dog.jpg";
-  for (int i = 0; i < m_frames; ++i) {
+  int w = m_partition_params[0].in_w;
+  int h = m_partition_params[0].in_h;
+  int c = m_partition_params[0].in_c;
+  for (int i = 0; i < m_frames; ++i)
+  {
     auto img = load_image(image_path);
     image im;
     im.c = img.c;
@@ -348,11 +385,13 @@ void Master::m_push_image() {
     im.h = img.h;
     im.w = img.w;
     image sized;
-    if (m_net.w == im.w && m_net.h == im.h) {
+    if (w == im.w && h == im.h)
+    {
       sized = make_image(im.w, im.h, im.c);
       memcpy(sized.data, im.data, im.w * im.h * im.c * sizeof(float));
-    } else
-      sized = resize_image(im, m_net.w, m_net.h);
+    }
+    else
+      sized = resize_image(im, w, h);
     // covert image to torch tensor
     c10::IntArrayRef s = {sized.c, sized.h, sized.w};
 
@@ -361,7 +400,7 @@ void Master::m_push_image() {
     // assert(tensor.sizes()[0] == sized.c);
     // assert(tensor.sizes()[1] == sized.h);
     // assert(tensor.sizes()[2] == sized.w);
-    Data_packet data_packet{i,       0,       0,       0, 0,
+    Data_packet data_packet{i, 0, 0, 0, 0,
                             sized.w, sized.h, sized.c, 0, tensor};
     // std::cout << *sized.data << std::endl;
     // push image to queue
@@ -378,11 +417,14 @@ void Master::m_push_image() {
   printf("push image exit\n");
 }
 
-void Master::m_pritition_image() {
+void Master::m_pritition_image()
+{
 
-  while (exit_flag) {
+  while (exit_flag)
+  {
     std::unique_lock<std::mutex> lock(m_prio_image_queue_mutex);
-    if (m_prio_image_queue.empty()) {
+    if (m_prio_image_queue.empty())
+    {
       continue;
     }
     Data_packet data_packet = m_prio_image_queue.top();
@@ -391,8 +433,10 @@ void Master::m_pritition_image() {
     int frame_seq = data_packet.frame_seq;
     int stage = data_packet.stage;
 
-    for (int i = 0; i < m_ftp_params[stage].partitions_h; ++i) {
-      for (int j = 0; j < m_ftp_params[stage].partitions_w; ++j) {
+    for (int i = 0; i < m_ftp_params[stage].partitions_h; ++i)
+    {
+      for (int j = 0; j < m_ftp_params[stage].partitions_w; ++j)
+      {
         int task_id = m_ftp_params[stage].task_ids[i][j];
         int dw1 = m_ftp_params[stage].input_tiles[task_id][0].w1;
         int dw2 = m_ftp_params[stage].input_tiles[task_id][0].w2;
@@ -412,7 +456,8 @@ void Master::m_pritition_image() {
         // assert(partition.sizes()[1] == dh2 - dh1 + 1);
         // assert(partition.sizes()[2] == dw2 - dw1 + 1);
         torch::Tensor fliped_partition;
-        switch (task_id) {
+        switch (task_id)
+        {
         case 0:
           fliped_partition = partition;
           break;
@@ -464,14 +509,18 @@ void Master::m_pritition_image() {
   printf("partition_image thread end\n");
 }
 
-void Master::m_merge_partitions() {
+void Master::m_merge_partitions()
+{
 
-  while (exit_flag) {
+  while (exit_flag)
+  {
     int counts = 0;
     std::unique_lock<std::mutex> lock(m_prio_partition_inference_result_mutex);
-    if (m_prio_partition_inference_result_queue.empty()) {
+    if (m_prio_partition_inference_result_queue.empty())
+    {
       continue;
     }
+    auto start = std::chrono::high_resolution_clock::now();
     Data_packet data_packet = m_prio_partition_inference_result_queue.front();
     lock.unlock();
 
@@ -481,23 +530,26 @@ void Master::m_merge_partitions() {
     int from = data_packet.from;
     int to = data_packet.to;
     // create merged image
-    c10::IntArrayRef s = {m_net.layers[to].out_c, m_net.layers[to].out_h,
-                          m_net.layers[to].out_w};
+    c10::IntArrayRef s = {m_partition_params[stage].out_c, m_partition_params[stage].out_h,
+                          m_partition_params[stage].out_w};
     torch::Tensor merged =
         torch::rand(s, torch::TensorOptions().device(torch::kCUDA));
     // assert(merged.sizes()[0] == m_net.layers[to].out_c);
     // assert(merged.sizes()[1] == m_net.layers[to].out_h);
     // assert(merged.sizes()[2] == m_net.layers[to].out_w);
 
-    while (counts < m_partition_params[stage].partitions) {
+    while (counts < m_partition_params[stage].partitions)
+    {
       std::unique_lock<std::mutex> lock1(
           m_prio_partition_inference_result_mutex);
-      if (m_prio_partition_inference_result_queue.empty()) {
+      if (m_prio_partition_inference_result_queue.empty())
+      {
         continue;
       }
       Data_packet data_packet = m_prio_partition_inference_result_queue.front();
       if (counts != 0 && data_packet.frame_seq != frame_seq ||
-          data_packet.stage != stage) {
+          data_packet.stage != stage)
+      {
 
         m_prio_partition_inference_result_queue.pop();
         m_prio_partition_inference_result_queue.push(data_packet);
@@ -541,7 +593,8 @@ void Master::m_merge_partitions() {
       assert(cropped_partition.sizes()[1] == h);
       assert(cropped_partition.sizes()[2] == w);
       torch::Tensor fliped_cropped_partition;
-      switch (task_id) {
+      switch (task_id)
+      {
       case 0:
         fliped_cropped_partition = cropped_partition;
         break;
@@ -573,24 +626,34 @@ void Master::m_merge_partitions() {
                                 stage + 1,
                                 m_partition_params[stage + 1].from,
                                 m_partition_params[stage + 1].to,
-                                m_net.layers[to].out_w,
-                                m_net.layers[to].out_h,
-                                m_net.layers[to].out_c,
+                                m_partition_params[stage].out_w,
+                                m_partition_params[stage].out_h,
+                                m_partition_params[stage].out_c,
                                 0,
                                 merged};
-    if (stage + 1 < m_stages - 1) {
+    if (stage + 1 < m_stages - 1)
+    {
       std::unique_lock<std::mutex> lock2(m_prio_image_queue_mutex);
       m_prio_image_queue.push(new_data_packet);
-    } else {
+    }
+    else
+    {
       new_data_packet.tensor = new_data_packet.tensor.to(torch::kCPU);
       std::unique_lock<std::mutex> lock2(m_prio_merged_result_mutex);
       m_prio_merged_result_queue.push(new_data_packet);
     }
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+
+    std::cout << "merged function: " << duration.count()
+              << " milliseconds" << std::endl;
   }
   printf("merge partition thread end\n");
 }
 // handle mutilple client
-int Master::m_recv_data_packet() {
+int Master::m_recv_data_packet()
+{
 
   int sock;
   fd_set active_fd_set, read_fd_set;
@@ -600,7 +663,8 @@ int Master::m_recv_data_packet() {
 
   /* Create the socket and set it up to accept connections. */
   sock = make_socket(m_port);
-  if (listen(sock, 1) < 0) {
+  if (listen(sock, 1) < 0)
+  {
     perror("listen");
     exit(EXIT_FAILURE);
   }
@@ -609,24 +673,30 @@ int Master::m_recv_data_packet() {
   FD_ZERO(&active_fd_set);
   FD_SET(sock, &active_fd_set);
 
-  while (1) {
+  while (1)
+  {
     /* Block until input arrives on one or more active sockets. */
     read_fd_set = active_fd_set;
-    if (select(FD_SETSIZE, &read_fd_set, NULL, NULL, NULL) < 0) {
+    if (select(FD_SETSIZE, &read_fd_set, NULL, NULL, NULL) < 0)
+    {
       perror("select");
       exit(EXIT_FAILURE);
     }
     /* Service all the sockets with input pending. */
-    for (i = 0; i < FD_SETSIZE; ++i) {
+    for (i = 0; i < FD_SETSIZE; ++i)
+    {
 
-      if (FD_ISSET(i, &read_fd_set)) {
-        if (i == sock) {
+      if (FD_ISSET(i, &read_fd_set))
+      {
+        if (i == sock)
+        {
           /* Connection request on original socket. */
           int new_sock = 0;
           size = sizeof(clientname);
           new_sock =
               accept(sock, (struct sockaddr *)&clientname, (socklen_t *)&size);
-          if (new_sock < 0) {
+          if (new_sock < 0)
+          {
             perror("accept");
             exit(EXIT_FAILURE);
           }
@@ -635,7 +705,9 @@ int Master::m_recv_data_packet() {
           //                            %hd.\n", inet_ntoa(clientname.sin_addr),
           //                            ntohs(clientname.sin_port));
           FD_SET(new_sock, &active_fd_set);
-        } else {
+        }
+        else
+        {
           /* Data arriving on an already-connected socket. */
           int metadata_buffer[9];
           Data_packet data_packet;
@@ -666,7 +738,8 @@ int Master::m_recv_data_packet() {
           // printf("frame %d stage %d task_id %d recv\n",
           // data_packet.frame_seq,
           //        data_packet.stage, data_packet.task_id);
-          if (valread < 0) {
+          if (valread < 0)
+          {
             close(i);
             FD_CLR(i, &active_fd_set);
           }
@@ -678,26 +751,31 @@ int Master::m_recv_data_packet() {
   return 0;
 }
 
-int Master::m_send_data_packet() {
+int Master::m_send_data_packet()
+{
 
   // create multiple filedes
   std::vector<int> socks(m_server_addresses.size(), 0);
 
   // connections
-  for (int i = 0; i < m_server_addresses.size(); ++i) {
+  for (int i = 0; i < m_server_addresses.size(); ++i)
+  {
     struct sockaddr_in servername;
     /* Create the socket. */
     socks[i] = socket(AF_INET, SOCK_STREAM, 0);
     init_sockaddr(&servername, m_server_addresses[i].ip.c_str(),
                   m_server_addresses[i].port);
-    if (socks[i] < 0) {
+    if (socks[i] < 0)
+    {
       perror("socket (client)");
       exit(EXIT_FAILURE);
     }
     /* Connect to the server. */
-    while (1) {
+    while (1)
+    {
       if (0 > connect(socks[i], (struct sockaddr *)&servername,
-                      sizeof(servername))) {
+                      sizeof(servername)))
+      {
         // perror("connect (client)");
         continue;
       }
@@ -706,10 +784,12 @@ int Master::m_send_data_packet() {
   }
   int target_sock = 0;
 
-  while (exit_flag) {
+  while (exit_flag)
+  {
 
     std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
-    if (m_prio_task_queue.empty()) {
+    if (m_prio_task_queue.empty())
+    {
       continue;
     }
     Data_packet data_packet = m_prio_task_queue.top();
@@ -720,7 +800,7 @@ int Master::m_send_data_packet() {
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
-    delete[](char *) serialized_data_packet;
+    delete[] (char *)serialized_data_packet;
     target_sock++;
   }
 
@@ -729,7 +809,8 @@ int Master::m_send_data_packet() {
   return 0;
 }
 
-inline static void *serialize_data_packet(Data_packet &data_packet) {
+inline static void *serialize_data_packet(Data_packet &data_packet)
+{
   std::ostringstream stream;
   torch::save(data_packet.tensor, stream);
   const std::string str = stream.str();
@@ -744,11 +825,14 @@ inline static void *serialize_data_packet(Data_packet &data_packet) {
   return buffer;
 }
 // inference final stage
-void Master::m_inference() {
+void Master::m_inference()
+{
   int completed_frames = 0;
-  while (exit_flag) {
+  while (exit_flag)
+  {
     std::unique_lock<std::mutex> lock(m_prio_merged_result_mutex);
-    if (m_prio_merged_result_queue.empty()) {
+    if (m_prio_merged_result_queue.empty())
+    {
       continue;
     }
 
@@ -864,7 +948,8 @@ void Master::m_inference() {
     // auto obj_names = objects_names_from_file("./data/coco.names");
     // show_console_result(result_vec, obj_names, 0);
     ++completed_frames;
-    if (completed_frames == m_frames) {
+    if (completed_frames == m_frames)
+    {
       exit_flag = 0;
       printf("master exit\n");
       break;

@@ -16,6 +16,13 @@ typedef struct partition_parameter {
   int partitions;
   int from;
   int to;
+  int in_w;
+  int in_h;
+  int in_c;
+
+  int out_w;
+  int out_h;
+  int out_c;
 } partition_parameter;
 
 typedef struct partition_range {
@@ -48,20 +55,17 @@ typedef struct def_ftp_para {
 std::vector<ftp_parameter>
 perform_ftp(std::vector<partition_parameter> partition_para, int stages,
             network net);
-std::vector<std::vector<network>>
-generate_sub_network(char *cfg_file, std::vector<ftp_parameter> ftp_params,
-                     int stages,
-                     std::vector<partition_parameter> partition_params);
+
 network parse_network_cfg_custom_whc(char *filename,
                                      partition_parameter partition_param,
                                      ftp_parameter ftp_param, int task_id,
-                                     int stages, int stage, int batch,
+                                     int batch,
                                      int time_steps);
 
 void load_weights_upto_subnet(network *net, network *sub_net, char *filename,
                               int cutoff, int start_layer,
                               int end_layer);
-void load_sub_nets_weights(std::vector<std::vector<network>> &sub_nets,
+void load_sub_nets_weights(network net, std::vector<std::vector<network>> &sub_nets,
                            char *filename, char *weights, int stages,
                            std::vector<partition_parameter> partition_params);
 #endif

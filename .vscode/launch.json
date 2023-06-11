@@ -4,37 +4,37 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Master",
-            "program": "${workspaceFolder}/build/main",
-            "args": ["/home/nx/src/mountain_cpp/launch/launch.json", "master"],
-            "cwd": "${workspaceFolder}/launch/bin"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Worker_0",
-            "program": "${workspaceFolder}/build/main",
-            "args": ["/home/nx/src/mountain_cpp/launch/launch.json", "worker", "0"],
-            "cwd": "${workspaceFolder}/launch/bin"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Worker_1",
-            "program": "${workspaceFolder}/build/main",
-            "args": ["/home/wsl/src/mountain_cpp/launch/launch.json", "worker", "1"],
-            "cwd": "${workspaceFolder}/launch/bin"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Worker_2",
-            "program": "${workspaceFolder}/build/main",
-            "args": ["/home/wsl/src/mountain_cpp/launch/launch.json", "worker", "2"],
-            "cwd": "${workspaceFolder}/launch"
-        }
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Master",
+        //     "program": "${workspaceFolder}/build/main",
+        //     "args": ["${workspaceFolder}/launch/launch.json", "master"],
+        //     "cwd": "${workspaceFolder}/launch/bin"
+        // },
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Worker_0",
+        //     "program": "${workspaceFolder}/build/main",
+        //     "args": ["${workspaceFolder}/launch/launch.json", "worker", "0"],
+        //     "cwd": "${workspaceFolder}/launch/bin"
+        // },
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Worker_1",
+        //     "program": "${workspaceFolder}/build/main",
+        //     "args": ["/home/wsl/src/mountain_cpp/launch/launch.json", "worker", "1"],
+        //     "cwd": "${workspaceFolder}/launch/bin"
+        // },
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Worker_2",
+        //     "program": "${workspaceFolder}/build/main",
+        //     "args": ["/home/wsl/src/mountain_cpp/launch/launch.json", "worker", "2"],
+        //     "cwd": "${workspaceFolder}/launch"
+        // }
     ]
 }

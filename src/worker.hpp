@@ -57,7 +57,6 @@ class Master {
 private:
   std::string m_ip;
   int m_port;
-  network m_net;
   network m_last_stage_net;
   int m_frames;
   int m_stages;
@@ -89,12 +88,10 @@ private:
   std::thread m_push_image_thread;
 
 public:
-  Master(std::string ip, int port, network net, int stages,
-         network last_stage_net, int frames,
-         std::vector<partition_parameter> partition_params,
+  Master(std::string ip, int port, int stages, network last_stage_net,
+         int frames, std::vector<partition_parameter> partition_params,
          std::vector<ftp_parameter> ftp_params,
-         std::vector<server_address> server_addresses,
-         std::vector<std::vector<network>> sub_nets);
+         std::vector<server_address> server_addresses);
   Master() = delete;
   Master(const Master &) = delete;
   Master(const Master &&) = delete;

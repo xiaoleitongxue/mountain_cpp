@@ -2,5 +2,9 @@
     "clangd.arguments": [
         "--compile-commands-dir=${workspaceFolder}/build"
     ],
-    "clangd.path": "clangd"
+    "clangd.path": "clangd",
+    "files.associations": {
+        "chrono": "cpp",
+        "convolutional_layer.h": "c"
+    }
 }
