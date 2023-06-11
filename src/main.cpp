@@ -1,7 +1,6 @@
 #include <worker.hpp>
 #include "inference_helper.hpp"
 #include <chrono>
-#include <cuda_runtime.h>
 #include <iostream>
 #include <parse_launch_config.hpp>
 #include <string>
@@ -22,9 +21,9 @@ int main(int argc, char *argv[]) {
   // load_network
   // network *net = load_network(cfgfile, weights_file, 0);
   network net = parse_network_cfg_custom(cfgfile, 1, 1);
-  if (weights_file) {
-    load_weights(&net, weights_file);
-  }
+  // if (weights_file) {
+  //   load_weights(&net, weights_file);
+  // }
   // ftp
   std::vector<ftp_parameter> ftp_params =
       perform_ftp(launch_param.partition_params, launch_param.stages, net);
@@ -41,7 +40,7 @@ int main(int argc, char *argv[]) {
                       std::chrono::high_resolution_clock::time_point>>(100);
   std::string worker_type = argv[2];
   if (worker_type == "master") {
-    Master master = Master{launch_param.master_addr.ip,
+    Master master{launch_param.master_addr.ip,
                            launch_param.master_addr.port,
                            net,
                            launch_param.stages,
@@ -86,7 +85,7 @@ int main(int argc, char *argv[]) {
     // create worker object
     std::string worker_id = argv[3];
     int worker_id_ = std::stoi(worker_id);
-    Worker worker = Worker{launch_param.worker_addr[worker_id_].ip,
+    Worker worker{launch_param.worker_addr[worker_id_].ip,
                            launch_param.worker_addr[worker_id_].port, sub_nets,
                            launch_param.master_addr};
     // worker.m_receive_data_packet();

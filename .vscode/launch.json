@@ -9,16 +9,16 @@
             "request": "launch",
             "name": "Master",
             "program": "${workspaceFolder}/build/main",
-            "args": ["/home/wsl/src/mountain_cpp/launch/launch.json", "master"],
-            "cwd": "${workspaceFolder}/launch"
+            "args": ["/home/nx/src/mountain_cpp/launch/launch.json", "master"],
+            "cwd": "${workspaceFolder}/launch/bin"
         },
         {
             "type": "lldb",
             "request": "launch",
             "name": "Worker_0",
             "program": "${workspaceFolder}/build/main",
-            "args": ["/home/wsl/src/mountain_cpp/launch/launch.json", "worker", "0"],
-            "cwd": "${workspaceFolder}/launch"
+            "args": ["/home/nx/src/mountain_cpp/launch/launch.json", "worker", "0"],
+            "cwd": "${workspaceFolder}/launch/bin"
         },
         {
             "type": "lldb",
@@ -26,7 +26,7 @@
             "name": "Worker_1",
             "program": "${workspaceFolder}/build/main",
             "args": ["/home/wsl/src/mountain_cpp/launch/launch.json", "worker", "1"],
-            "cwd": "${workspaceFolder}/launch"
+            "cwd": "${workspaceFolder}/launch/bin"
         },
         {
             "type": "lldb",

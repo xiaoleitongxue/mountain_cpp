@@ -2,12 +2,9 @@
 #define WORKER_HPP_LLL
 
 #include <ATen/core/TensorBody.h>
-#include <ATen/ops/from_blob.h>
-#include <ATen/ops/rand.h>
-#include <ATen/ops/tensor.h>
 #include <arpa/inet.h>
 #include <c10/core/DeviceType.h>
-#include <c10/util/Load.h>
+
 #include <data_packet.hpp>
 #include <torch/serialize/input-archive.h>
 #include <torch/torch.h>
@@ -48,6 +45,9 @@ private:
 public:
   Worker(std::string ip, int port, std::vector<std::vector<network>> sub_nets,
          struct server_address master_addr);
+  Worker() = delete;
+  Worker(const Worker &) = delete;
+  Worker(const Worker &&) = delete;
   void m_inference();
   int m_recv_data_packet();
   int m_send_data_packet();
@@ -73,8 +73,7 @@ private:
       m_prio_task_queue;
   std::priority_queue<Data_packet, std::vector<Data_packet>, Compare>
       m_prio_image_queue;
-  std::queue<Data_packet>
-      m_prio_partition_inference_result_queue;
+  std::queue<Data_packet> m_prio_partition_inference_result_queue;
   std::priority_queue<Data_packet, std::vector<Data_packet>, Compare>
       m_prio_merged_result_queue;
 
@@ -96,6 +95,9 @@ public:
          std::vector<ftp_parameter> ftp_params,
          std::vector<server_address> server_addresses,
          std::vector<std::vector<network>> sub_nets);
+  Master() = delete;
+  Master(const Master &) = delete;
+  Master(const Master &&) = delete;
   void m_pritition_image();
   void m_merge_partitions();
   void m_inference();

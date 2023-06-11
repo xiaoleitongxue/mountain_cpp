@@ -1,4 +1,5 @@
 #include "data_packet.hpp"
+#include <c10/core/DeviceType.h>
 #include <chrono>
 #include <iostream>
 #include <worker.hpp>
@@ -128,7 +129,7 @@ void Worker::m_inference() {
     Data_packet data_packet = m_prio_task_queue.top();
     m_prio_task_queue.pop();
     lock1.unlock();
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
     network net = m_sub_nets[data_packet.stage][data_packet.task_id];
     // assert(data_packet.tensor.sizes()[0] == net.c);
     // assert(data_packet.tensor.sizes()[1] == net.h);
@@ -142,7 +143,7 @@ void Worker::m_inference() {
                           net.layers[net.n - 1].out_h,
                           net.layers[net.n - 1].out_w};
 
-    torch::Tensor tensor = torch::from_blob(out, s).clone();
+    torch::Tensor tensor = torch::from_blob(out, s);
     // std::cout << net.layers[net.n - 1].out_c << " "
     //           << net.layers[net.n - 1].out_h << " "
     //           << net.layers[net.n - 1].out_w << std::endl;
@@ -169,12 +170,12 @@ void Worker::m_inference() {
     // push result to result queue
     std::unique_lock<std::mutex> lock2(m_prio_result_queue_mutex);
     m_prio_result_queue.push(new_data_packet);
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    // auto stop = std::chrono::high_resolution_clock::now();
+    // auto duration =
+    //     std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-    std::cout << "Time taken by function: " << duration.count()
-              << " milliseconds" << std::endl;
+    // std::cout << "Time taken by function: " << duration.count()
+    //           << " milliseconds" << std::endl;
   }
 }
 int Worker::m_send_data_packet() {
@@ -207,7 +208,7 @@ int Worker::m_send_data_packet() {
     send(sock, serialized_data_packet,
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // free buffer
-    delete[] (char *)serialized_data_packet;
+    delete[](char *) serialized_data_packet;
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
   }
@@ -338,7 +339,7 @@ LIB_API image_t Master::load_image(std::string image_filename) {
 }
 
 void Master::m_push_image() {
-  std::string image_path = "./dog.jpg";
+  std::string image_path = "../dog.jpg";
   for (int i = 0; i < m_frames; ++i) {
     auto img = load_image(image_path);
     image im;
@@ -356,6 +357,7 @@ void Master::m_push_image() {
     c10::IntArrayRef s = {sized.c, sized.h, sized.w};
 
     torch::Tensor tensor = torch::from_blob(sized.data, s);
+    tensor = tensor.to(torch::kCUDA);
     // assert(tensor.sizes()[0] == sized.c);
     // assert(tensor.sizes()[1] == sized.h);
     // assert(tensor.sizes()[2] == sized.w);
@@ -365,13 +367,7 @@ void Master::m_push_image() {
     // push image to queue
     std::unique_lock<std::mutex> lock(m_prio_image_queue_mutex);
     m_prio_image_queue.push(data_packet);
-    // network_predict(m_net, sized.data);
-    // for (int k = 0; k < m_net.n; ++k) {
-    //   layer l = m_net.layers[k];
-    //   if (l.type != REGION && l.type != YOLO && (*m_net.cuda_graph_ready) ==
-    //   0)
-    //     cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-    // }
+
     std::chrono::high_resolution_clock::time_point t1 =
         std::chrono::high_resolution_clock::now();
     frame_time_point[i] = {t1, t1};
@@ -487,7 +483,8 @@ void Master::m_merge_partitions() {
     // create merged image
     c10::IntArrayRef s = {m_net.layers[to].out_c, m_net.layers[to].out_h,
                           m_net.layers[to].out_w};
-    torch::Tensor merged = torch::rand(s);
+    torch::Tensor merged =
+        torch::rand(s, torch::TensorOptions().device(torch::kCUDA));
     // assert(merged.sizes()[0] == m_net.layers[to].out_c);
     // assert(merged.sizes()[1] == m_net.layers[to].out_h);
     // assert(merged.sizes()[2] == m_net.layers[to].out_w);
@@ -501,6 +498,7 @@ void Master::m_merge_partitions() {
       Data_packet data_packet = m_prio_partition_inference_result_queue.front();
       if (counts != 0 && data_packet.frame_seq != frame_seq ||
           data_packet.stage != stage) {
+
         m_prio_partition_inference_result_queue.pop();
         m_prio_partition_inference_result_queue.push(data_packet);
         continue;
@@ -584,6 +582,7 @@ void Master::m_merge_partitions() {
       std::unique_lock<std::mutex> lock2(m_prio_image_queue_mutex);
       m_prio_image_queue.push(new_data_packet);
     } else {
+      new_data_packet.tensor = new_data_packet.tensor.to(torch::kCPU);
       std::unique_lock<std::mutex> lock2(m_prio_merged_result_mutex);
       m_prio_merged_result_queue.push(new_data_packet);
     }
@@ -658,8 +657,8 @@ int Master::m_recv_data_packet() {
           torch::Tensor tensor;
           torch::load(tensor, stream_);
           // create Data_packet
-          data_packet.tensor = tensor;
-          
+          data_packet.tensor = tensor.to(torch::kCUDA);
+
           // push to queue
           std::unique_lock<std::mutex> lock(
               m_prio_partition_inference_result_mutex);
@@ -715,13 +714,13 @@ int Master::m_send_data_packet() {
     }
     Data_packet data_packet = m_prio_task_queue.top();
     m_prio_task_queue.pop();
-
+    data_packet.tensor = data_packet.tensor.to(torch::kCPU);
     void *serialized_data_packet = serialize_data_packet(data_packet);
     send(socks[target_sock % m_server_addresses.size()], serialized_data_packet,
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
-    delete[] (char *)serialized_data_packet;
+    delete[](char *) serialized_data_packet;
     target_sock++;
   }
 
@@ -756,6 +755,7 @@ void Master::m_inference() {
     Data_packet data_packet = m_prio_merged_result_queue.top();
     m_prio_merged_result_queue.pop();
     lock.unlock();
+
     float *X = data_packet.tensor.data_ptr<float>();
     // layer merged_layer =
     //     m_net.layers[m_partition_params[data_packet.stage - 1].to];
