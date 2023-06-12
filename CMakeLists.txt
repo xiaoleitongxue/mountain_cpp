@@ -1,22 +1,20 @@
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 project(mountain_cpp)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
-set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/share/cmake/Torch)
+
+
+# find package with config mode
+set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/torch/share/cmake/Torch)
 find_package(Torch REQUIRED CONFIGS TorchConfig.cmake)
-
-# set(CMAKE_C_COMPILER clang-16) set(CMAKE_CXX_COMPILER clang++-16)
-# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++
-# -lc++abi") set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-
-# add_compile_options(-fcolor-diagnostics)
 
 set(Darknet_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/share/darknet)
 find_package(Darknet REQUIRED)
 
 set(nlohmann_json_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/json/build)
 find_package(nlohmann_json 3.2.0 REQUIRED)
-find_package(OpenCV REQUIRED)
+
+
 
 add_library(data_packet src/data_packet.cpp)
 target_include_directories(data_packet PRIVATE src)
@@ -50,15 +48,14 @@ target_include_directories(
 target_link_libraries(worker PRIVATE data_packet "${TORCH_LIBRARIES}"
                                      partition_model Darknet::dark)
 
-# set_property(TARGET worker PROPERTY CXX_STANDARD 14)
-
 add_executable(main src/main.cpp)
 target_compile_definitions(worker PUBLIC GPU)
 target_include_directories(
-  main PUBLIC ${CMAKE_CURRENT_LIST_DIR}//3rdparty/darknet/src
+  main PUBLIC ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src
               ${CMAKE_CURRENT_LIST_DIR}/3rdparty/stb/include src)
 target_link_libraries(
   main PUBLIC worker partition_model parse_launch_config inference_helper
               nlohmann_json::nlohmann_json Darknet::dark)
               set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/launch)
+
 install(TARGETS main DESTINATION bin)

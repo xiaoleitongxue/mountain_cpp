@@ -520,7 +520,7 @@ void Master::m_merge_partitions()
     {
       continue;
     }
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
     Data_packet data_packet = m_prio_partition_inference_result_queue.front();
     lock.unlock();
 
@@ -642,12 +642,12 @@ void Master::m_merge_partitions()
       std::unique_lock<std::mutex> lock2(m_prio_merged_result_mutex);
       m_prio_merged_result_queue.push(new_data_packet);
     }
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    // auto stop = std::chrono::high_resolution_clock::now();
+    // auto duration =
+    //     std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-    std::cout << "merged function: " << duration.count()
-              << " milliseconds" << std::endl;
+    // std::cout << "merged function: " << duration.count()
+    //           << " milliseconds" << std::endl;
   }
   printf("merge partition thread end\n");
 }
@@ -672,7 +672,7 @@ int Master::m_recv_data_packet()
   /* Initialize the set of active sockets. */
   FD_ZERO(&active_fd_set);
   FD_SET(sock, &active_fd_set);
-
+  auto start = std::chrono::high_resolution_clock::now();
   while (1)
   {
     /* Block until input arrives on one or more active sockets. */
@@ -738,6 +738,13 @@ int Master::m_recv_data_packet()
           // printf("frame %d stage %d task_id %d recv\n",
           // data_packet.frame_seq,
           //        data_packet.stage, data_packet.task_id);
+          auto stop = std::chrono::high_resolution_clock::now();
+          auto duration =
+              std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+
+          std::cout << "recv: " << duration.count()
+                    << " milliseconds" << " " <<data_packet.frame_seq <<std::endl;
+          start = stop;
           if (valread < 0)
           {
             close(i);
