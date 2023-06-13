@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 project(mountain_cpp)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
@@ -53,9 +53,19 @@ target_compile_definitions(worker PUBLIC GPU)
 target_include_directories(
   main PUBLIC ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src
               ${CMAKE_CURRENT_LIST_DIR}/3rdparty/stb/include src)
+target_link_options(main PRIVATE -Wl,-rpath,../lib)
 target_link_libraries(
   main PUBLIC worker partition_model parse_launch_config inference_helper
               nlohmann_json::nlohmann_json Darknet::dark)
-              set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/launch)
 
+
+# install executable
+# set(CMAKE_INSTALL_RPATH ${PROJECT_SOURCE_DIR}/3rdparty/lib)
+set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/install)
 install(TARGETS main DESTINATION bin)
+# SET_TARGET_PROPERTIES(main
+#     PROPERTIES INSTALL_RPATH "$ORIGIN;../lib")
+# install(FILES ${CMAKE_CURRENT_LIST_DIR}/build/main DESTINATION bin)
+# install(FILES Darknet::dark DESTINATION lib)
+install(IMPORTED_RUNTIME_ARTIFACTS Darknet::dark DESTINATION lib)
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/torch/lib DESTINATION .)
