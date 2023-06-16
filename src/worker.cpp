@@ -123,10 +123,11 @@ static image load_image_stb(char *filename, int channels)
   return im;
 }
 
-Worker::Worker(std::string ip, int port,
+Worker::Worker(int worker_id, std::string ip, int port,
                std::vector<std::vector<network>> sub_nets,
                struct server_address master_addr)
 {
+  m_worker_id = worker_id;
   m_ip = ip;
   m_port = port;
   m_sub_nets = sub_nets;
@@ -146,6 +147,7 @@ void Worker::m_inference()
     Data_packet data_packet = m_prio_task_queue.top();
     m_prio_task_queue.pop();
     lock1.unlock();
+    
     // auto start = std::chrono::high_resolution_clock::now();
     network net = m_sub_nets[data_packet.stage][data_packet.task_id];
     // assert(data_packet.tensor.sizes()[0] == net.c);
@@ -153,6 +155,7 @@ void Worker::m_inference()
     // assert(data_packet.tensor.sizes()[2] == net.w);
     // convert tensor to array
     float *X = data_packet.tensor.data_ptr<float>();
+    // std::cout << "start inference !" << std::endl;
     float *out = network_predict(net, X);
     // std::cout << "output: " << *out << std::endl;
     // convert array to torch::Tensor
@@ -160,7 +163,7 @@ void Worker::m_inference()
                           net.layers[net.n - 1].out_h,
                           net.layers[net.n - 1].out_w};
 
-    torch::Tensor tensor = torch::from_blob(out, s);
+    torch::Tensor tensor = torch::from_blob(out, s).clone();
     // std::cout << net.layers[net.n - 1].out_c << " "
     //           << net.layers[net.n - 1].out_h << " "
     //           << net.layers[net.n - 1].out_w << std::endl;
@@ -193,6 +196,7 @@ void Worker::m_inference()
 
     // std::cout << "Time taken by function: " << duration.count()
     //           << " milliseconds" << std::endl;
+    // std::cout << "end inference !" << std::endl;
   }
 }
 int Worker::m_send_data_packet()
@@ -396,23 +400,22 @@ void Master::m_push_image()
     c10::IntArrayRef s = {sized.c, sized.h, sized.w};
 
     torch::Tensor tensor = torch::from_blob(sized.data, s);
+    
     tensor = tensor.to(torch::kCUDA);
-    // assert(tensor.sizes()[0] == sized.c);
-    // assert(tensor.sizes()[1] == sized.h);
-    // assert(tensor.sizes()[2] == sized.w);
+     
     Data_packet data_packet{i, 0, 0, 0, 0,
                             sized.w, sized.h, sized.c, 0, tensor};
     // std::cout << *sized.data << std::endl;
     // push image to queue
     std::unique_lock<std::mutex> lock(m_prio_image_queue_mutex);
     m_prio_image_queue.push(data_packet);
-
+    lock.unlock();
+    free(im.data);
+    free(sized.data);
     std::chrono::high_resolution_clock::time_point t1 =
         std::chrono::high_resolution_clock::now();
     frame_time_point[i] = {t1, t1};
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    free(im.data);
-    free(sized.data);
   }
   printf("push image exit\n");
 }
@@ -427,9 +430,11 @@ void Master::m_pritition_image()
     {
       continue;
     }
+    // queue is not empty
     Data_packet data_packet = m_prio_image_queue.top();
     m_prio_image_queue.pop();
     lock.unlock();
+    
     int frame_seq = data_packet.frame_seq;
     int stage = data_packet.stage;
 
@@ -487,22 +492,7 @@ void Master::m_pritition_image()
         std::unique_lock<std::mutex> lock1(m_prio_task_queue_mutex);
         m_prio_task_queue.push(new_data_packet);
 
-        // float *X2 = new_data_packet.tensor.data_ptr<float>();
-        // // for(int k = 0; k < (dw2 - dw1 + 1) * (dh2 - dh1 + 1) * c; ++k){
-        // //   assert(*(X1 + k) == *(X2 + k));
-        // // }
-        // network_predict(m_net, X1);
-        // for (int k = 0; k < m_net.n; ++k) {
-        //   layer l = m_net.layers[k];
-        //   if (l.type != REGION && l.type != YOLO &&
-        //       (*m_net.cuda_graph_ready) == 0)
-        //     cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-        //   std::cout << k << " " << *l.output << std::endl;
-        // }
-
-        // float *out2 = network_predict(m_sub_nets[0][0], X1);
-        // float *out3 = network_predict(m_sub_nets[0][0], X2);
-        // std::cout << *out2 << "," << *out3 << std::endl;
+        
       }
     }
   }
@@ -589,9 +579,9 @@ void Master::m_merge_partitions()
                       at::indexing::Slice(0, w)})
               .clone();
       // flip data
-      assert(cropped_partition.sizes()[0] == c);
-      assert(cropped_partition.sizes()[1] == h);
-      assert(cropped_partition.sizes()[2] == w);
+      // assert(cropped_partition.sizes()[0] == c);
+      // assert(cropped_partition.sizes()[1] == h);
+      // assert(cropped_partition.sizes()[2] == w);
       torch::Tensor fliped_cropped_partition;
       switch (task_id)
       {
@@ -729,7 +719,7 @@ int Master::m_recv_data_packet()
           torch::Tensor tensor;
           torch::load(tensor, stream_);
           // create Data_packet
-          data_packet.tensor = tensor.to(torch::kCUDA);
+          data_packet.tensor = tensor;
 
           // push to queue
           std::unique_lock<std::mutex> lock(
@@ -742,8 +732,9 @@ int Master::m_recv_data_packet()
           auto duration =
               std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-          std::cout << "recv: " << duration.count()
-                    << " milliseconds" << " " <<data_packet.frame_seq <<std::endl;
+          // std::cout << "recv: " << duration.count()
+          //           << " milliseconds"
+          //           << " " << data_packet.frame_seq << std::endl;
           start = stop;
           if (valread < 0)
           {

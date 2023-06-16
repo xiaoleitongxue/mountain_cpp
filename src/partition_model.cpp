@@ -841,7 +841,6 @@ void load_sub_nets_weights(network net, std::vector<std::vector<network>> &sub_n
       load_weights_upto_subnet(&net, &sub_nets[i][j], weights,
                                partition_params[i].to, partition_params[i].from,
                                partition_params[i].to);
-      // load_weights(&sub_nets[i][j], weights);
     }
   }
 }

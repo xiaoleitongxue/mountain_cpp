@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 project(mountain_cpp)
-set(CMAKE_BUILD_TYPE Debug)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 

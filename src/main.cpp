@@ -34,14 +34,12 @@ int main(int argc, char *argv[])
     launch_param.partition_params[i].out_h = net.layers[to].out_h;
     launch_param.partition_params[i].out_c = net.layers[to].out_c;
   }
-
   std::vector<ftp_parameter> ftp_params =
       perform_ftp(launch_param.partition_params, launch_param.stages, net);
-
   frame_time_point =
       std::vector<std::pair<std::chrono::high_resolution_clock::time_point,
                             std::chrono::high_resolution_clock::time_point>>(
-          300);
+          launch_param.frames);
   std::string worker_type = argv[2];
   if (worker_type == "master")
   {
@@ -63,10 +61,7 @@ int main(int argc, char *argv[])
                   ftp_params,
                   launch_param.worker_addr};
 
-    // master.m_push_image(launch_param.filename);
-    // master.m_pritition_image();
-    // // std::thread send_data_packet_thread(&Master::m_send_data_packet,
-    // &master); sleep(5); master.m_merge_partitions();
+
 
     // start worker thread
     std::thread push_image_thread(&Master::m_push_image, &master);
@@ -81,7 +76,7 @@ int main(int argc, char *argv[])
     merge_partition_thread.join();
     inference_thread.join();
     send_data_packet_thread.join();
-
+    // recv_data_packet_thread.join();
     for (int i = 0; i < launch_param.frames; ++i)
     {
       auto diff = duration_cast<std::chrono::milliseconds>(
@@ -89,25 +84,18 @@ int main(int argc, char *argv[])
       std::cout << "frame Time " << i << " " << diff.count() << " milliseconds"
                 << std::endl;
     }
-    recv_data_packet_thread.join();
-
-    // inform worker to termial
   }
   else if (worker_type == "worker")
   {
     std::vector<std::vector<network>> sub_nets(launch_param.stages - 1);
-    // for (int i = 0; i < launch_param.stages - 1; ++i) {
-    //   sub_nets.push_back(
-    //       std::vector<network>(launch_param.partition_params[i].partitions));
-    // }
+    
     for (int i = 0; i < launch_param.stages - 1; ++i)
     {
       for (int j = 0; j < launch_param.partition_params[i].partitions; ++j)
       {
-        network net = parse_network_cfg_custom_whc(
+        network sub_net = parse_network_cfg_custom_whc(
             cfgfile, launch_param.partition_params[i], ftp_params[i], j, 1, 1);
-        // network net = parse_network_cfg_custom(cfg_file, 1, 1);
-        sub_nets[i].push_back(net);
+        sub_nets[i].push_back(sub_net);
       }
     }
 
@@ -123,7 +111,7 @@ int main(int argc, char *argv[])
     // create worker object
     std::string worker_id = argv[3];
     int worker_id_ = std::stoi(worker_id);
-    Worker worker{launch_param.worker_addr[worker_id_].ip,
+    Worker worker{worker_id_, launch_param.worker_addr[worker_id_].ip,
                   launch_param.worker_addr[worker_id_].port, sub_nets,
                   launch_param.master_addr};
     // worker.m_receive_data_packet();
