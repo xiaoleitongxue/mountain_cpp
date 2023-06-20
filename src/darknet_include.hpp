@@ -1,10 +1,6 @@
+
 #ifndef DARKNET_INCLUDE_HPP
-#define DARKNET_INCLUDE_HPP
-#include "darknet.h"
-#include <system_error>
-#include <vector>
-#include "network.h"
-extern "C" {
+
 #include "activation_layer.h"
 #include "activations.h"
 #include "assert.h"
@@ -17,6 +13,7 @@ extern "C" {
 #include "cost_layer.h"
 #include "crnn_layer.h"
 #include "crop_layer.h"
+#include "darknet.h"
 #include "data.h"
 #include "detection_layer.h"
 #include "dropout_layer.h"
@@ -26,6 +23,7 @@ extern "C" {
 #include "local_layer.h"
 #include "lstm_layer.h"
 #include "maxpool_layer.h"
+#include "network.h"
 #include "normalization_layer.h"
 #include "option_list.h"
 #include "parser.h"
@@ -43,8 +41,9 @@ extern "C" {
 #include "utils.h"
 // #include "version.h"
 #include "yolo_layer.h"
-}
 
+#include <system_error>
+#include <vector>
 typedef struct {
   char *type;
   list *options;

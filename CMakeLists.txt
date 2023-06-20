@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 project(mountain_cpp)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 
 # find package with config mode
-set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/torch/share/cmake/Torch)
+set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/share/cmake/Torch)
 find_package(Torch REQUIRED CONFIGS TorchConfig.cmake)
 
 set(Darknet_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/share/darknet)
