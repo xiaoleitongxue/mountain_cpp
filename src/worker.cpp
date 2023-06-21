@@ -1,4 +1,5 @@
 #include "data_packet.hpp"
+#include <ATen/core/TensorBody.h>
 #include <c10/core/DeviceType.h>
 #include <chrono>
 #include <iostream>
@@ -122,15 +123,13 @@ Worker::Worker(int worker_id, std::string ip, int port,
 
 void Worker::m_inference() {
   while (1) {
-
-    std::unique_lock<std::mutex> lock1(m_prio_task_queue_mutex);
     if (m_prio_task_queue.empty()) {
       continue;
     }
+    std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
     Data_packet data_packet = m_prio_task_queue.top();
     m_prio_task_queue.pop();
-    lock1.unlock();
-
+    lock.unlock();
     // auto start = std::chrono::high_resolution_clock::now();
     network net = m_sub_nets[data_packet.stage][data_packet.task_id];
     // assert(data_packet.tensor.sizes()[0] == net.c);
@@ -171,15 +170,15 @@ void Worker::m_inference() {
                                 0,
                                 tensor};
     // push result to result queue
-    std::unique_lock<std::mutex> lock2(m_prio_result_queue_mutex);
+    std::unique_lock<std::mutex> lock1(m_prio_result_queue_mutex);
     m_prio_result_queue.push(new_data_packet);
+    lock1.unlock();
     // auto stop = std::chrono::high_resolution_clock::now();
     // auto duration =
     //     std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
     // std::cout << "Time taken by function: " << duration.count()
     //           << " milliseconds" << std::endl;
-    // std::cout << "end inference !" << std::endl;
   }
 }
 int Worker::m_send_data_packet() {
@@ -212,7 +211,7 @@ int Worker::m_send_data_packet() {
     send(sock, serialized_data_packet,
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // free buffer
-    delete[] (char *)serialized_data_packet;
+    delete[](char *) serialized_data_packet;
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
   }
@@ -222,89 +221,177 @@ int Worker::m_send_data_packet() {
   exit(EXIT_SUCCESS);
 }
 int Worker::m_recv_data_packet() {
-  int sock;
-  fd_set active_fd_set, read_fd_set;
-  int i;
-  struct sockaddr_in clientname;
-  size_t size;
+  int opt = 1;
+  int master_socket, addrlen, new_socket, client_socket[30],
+      max_clients = 30, activity, i, valread, sd;
+  int max_sd;
+  struct sockaddr_in address;
 
-  /* Create the socket and set it up to accept connections. */
-  sock = make_socket(m_port);
-  if (listen(sock, 1) < 0) {
+  char buffer[1025]; // data buffer of 1K
+
+  // set of socket descriptors
+  fd_set readfds;
+
+  // a message
+  char *message = "ECHO Daemon v1.0 \r\n";
+
+  // initialise all client_socket[] to 0 so not checked
+  for (i = 0; i < max_clients; i++) {
+    client_socket[i] = 0;
+  }
+
+  // create a master socket
+  if ((master_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+    perror("socket failed");
+    exit(EXIT_FAILURE);
+  }
+
+  // set master socket to allow multiple connections ,
+  // this is just a good habit, it will work without this
+  if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt,
+                 sizeof(opt)) < 0) {
+    perror("setsockopt");
+    exit(EXIT_FAILURE);
+  }
+
+  // type of socket created
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = INADDR_ANY;
+  address.sin_port = htons(m_port);
+
+  // bind the socket to localhost port 8888
+  if (bind(master_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    perror("bind failed");
+    exit(EXIT_FAILURE);
+  }
+  printf("Listener on port %d \n", m_port);
+
+  // try to specify maximum of 3 pending connections for the master socket
+  if (listen(master_socket, 3) < 0) {
     perror("listen");
     exit(EXIT_FAILURE);
   }
 
-  /* Initialize the set of active sockets. */
-  FD_ZERO(&active_fd_set);
-  FD_SET(sock, &active_fd_set);
+  // accept the incoming connection
+  addrlen = sizeof(address);
+  puts("Waiting for connections ...");
 
   while (1) {
+    // clear the socket set
+    FD_ZERO(&readfds);
 
-    /* Block until input arrives on one or more active sockets. */
-    read_fd_set = active_fd_set;
-    if (select(FD_SETSIZE, &read_fd_set, NULL, NULL, NULL) < 0) {
-      perror("select");
-      exit(EXIT_FAILURE);
+    // add master socket to set
+    FD_SET(master_socket, &readfds);
+    max_sd = master_socket;
+
+    // add child sockets to set
+    for (i = 0; i < max_clients; i++) {
+      // socket descriptor
+      sd = client_socket[i];
+
+      // if valid socket descriptor then add to read list
+      if (sd > 0)
+        FD_SET(sd, &readfds);
+
+      // highest file descriptor number, need it for the select function
+      if (sd > max_sd)
+        max_sd = sd;
     }
-    /* Service all the sockets with input pending. */
-    for (i = 0; i < FD_SETSIZE; ++i) {
-      if (FD_ISSET(i, &read_fd_set)) {
-        if (i == sock) {
-          /* Connection request on original socket. */
-          int new_sock;
-          size = sizeof(clientname);
-          new_sock =
-              accept(sock, (struct sockaddr *)&clientname, (socklen_t *)&size);
-          if (new_sock < 0) {
-            perror("accept");
-            exit(EXIT_FAILURE);
-          }
-          //                    fprintf(stderr,
-          //                            "Server: connect from host %s, port
-          //                            %hd.\n", inet_ntoa(clientname.sin_addr),
-          //                            ntohs(clientname.sin_port));
-          FD_SET(new_sock, &active_fd_set);
-        } else {
-          /* Data arriving on an already-connected socket. */
-          int metadata_buffer[9];
-          Data_packet data_packet;
-          int valread = read(i, metadata_buffer, sizeof(int) * 9);
-          data_packet.frame_seq = metadata_buffer[0];
-          data_packet.task_id = metadata_buffer[1];
-          data_packet.stage = metadata_buffer[2];
-          data_packet.from = metadata_buffer[3];
-          data_packet.to = metadata_buffer[4];
-          data_packet.w = metadata_buffer[5];
-          data_packet.h = metadata_buffer[6];
-          data_packet.c = metadata_buffer[7];
-          data_packet.tensor_size = metadata_buffer[8];
-          char tensor_buffer[data_packet.tensor_size];
-          recv(i, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
 
-          std::string s(tensor_buffer, data_packet.tensor_size);
-          std::istringstream stream_{s};
-          // buffer to stream
-          torch::Tensor tensor;
-          torch::load(tensor, stream_);
+    // wait for an activity on one of the sockets , timeout is NULL ,
+    // so wait indefinitely
+    activity = select(max_sd + 1, &readfds, NULL, NULL, NULL);
 
-          // create Data_packet
-          data_packet.tensor = tensor;
+    if ((activity < 0) && (errno != EINTR)) {
+      printf("select error");
+    }
 
-          std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
-          m_prio_task_queue.push(data_packet);
-          // printf("frame %d stage %d task_id %d recv\n",
-          // data_packet.frame_seq,
-          //        data_packet.stage, data_packet.task_id);
-          if (valread < 0) {
-            close(i);
-            FD_CLR(i, &active_fd_set);
-          }
+    // If something happened on the master socket ,
+    // then its an incoming connection
+    if (FD_ISSET(master_socket, &readfds)) {
+      if ((new_socket = accept(master_socket, (struct sockaddr *)&address,
+                               (socklen_t *)&addrlen)) < 0) {
+        perror("accept");
+        exit(EXIT_FAILURE);
+      }
+
+      // inform user of socket number - used in send and receive commands
+      printf("New connection , socket fd is %d , ip is : %s , port : %d \n ",
+             new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+
+      // send new connection greeting message
+      if (send(new_socket, message, strlen(message), 0) != strlen(message)) {
+        perror("send");
+      }
+
+      puts("Welcome message sent successfully");
+
+      // add new socket to array of sockets
+      for (i = 0; i < max_clients; i++) {
+        // if position is empty
+        if (client_socket[i] == 0) {
+          client_socket[i] = new_socket;
+          printf("Adding to list of sockets as %d\n", i);
+
+          break;
         }
       }
     }
-  }
 
+    // else its some IO operation on some other socket
+    for (i = 0; i < max_clients; i++) {
+      sd = client_socket[i];
+
+      if (FD_ISSET(sd, &readfds)) {
+        // Check if it was for closing , and also read the
+        // incoming message
+        /* Data arriving on an already-connected socket. */
+        int metadata_buffer[9];
+        Data_packet data_packet;
+        valread = read(sd, metadata_buffer, sizeof(int) * 9);
+        data_packet.frame_seq = metadata_buffer[0];
+        data_packet.task_id = metadata_buffer[1];
+        data_packet.stage = metadata_buffer[2];
+        data_packet.from = metadata_buffer[3];
+        data_packet.to = metadata_buffer[4];
+        data_packet.w = metadata_buffer[5];
+        data_packet.h = metadata_buffer[6];
+        data_packet.c = metadata_buffer[7];
+        data_packet.tensor_size = metadata_buffer[8];
+        char tensor_buffer[data_packet.tensor_size];
+        recv(sd, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
+
+        std::string s(tensor_buffer, data_packet.tensor_size);
+        std::istringstream stream_{s};
+        // buffer to stream
+        torch::Tensor tensor;
+        torch::load(tensor, stream_);
+
+        // create Data_packet
+        data_packet.tensor = tensor;
+        std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
+        m_prio_task_queue.push(data_packet);
+        lock.unlock();
+        printf("worker received\n");
+        // reply
+        while (1) {
+          if (m_prio_result_queue.size()) {
+            break;
+          }
+        }
+        std::unique_lock<std::mutex> lock1(m_prio_result_queue_mutex);
+        data_packet = m_prio_result_queue.top();
+        m_prio_result_queue.pop();
+        lock1.unlock();
+        void *serialized_data_packet = serialize_data_packet(data_packet);
+        send(new_socket, serialized_data_packet,
+             data_packet.tensor_size + sizeof(int) * 9, 0);
+        // free buffer
+        delete[](char *) serialized_data_packet;
+        printf("worker send\n");
+      }
+    }
+  }
   return 0;
 }
 
@@ -338,251 +425,188 @@ LIB_API image_t Master::load_image(std::string image_filename) {
   return img;
 }
 
-void Master::m_push_image() {
+void Master::m_push_image(int frame_seq) {
   std::string image_path = "../dog.jpg";
   int w = m_partition_params[0].in_w;
   int h = m_partition_params[0].in_h;
   int c = m_partition_params[0].in_c;
-  for (int i = 0; i < m_frames; ++i) {
-    auto img = load_image(image_path);
-    image im;
-    im.c = img.c;
-    im.data = img.data;
-    im.h = img.h;
-    im.w = img.w;
-    image sized;
-    if (w == im.w && h == im.h) {
-      sized = make_image(im.w, im.h, im.c);
-      memcpy(sized.data, im.data, im.w * im.h * im.c * sizeof(float));
-    } else
-      sized = resize_image(im, w, h);
-    // covert image to torch tensor
-    c10::IntArrayRef s = {sized.c, sized.h, sized.w};
+  auto img = load_image(image_path);
+  image im;
+  im.c = img.c;
+  im.data = img.data;
+  im.h = img.h;
+  im.w = img.w;
+  image sized;
+  if (w == im.w && h == im.h) {
+    sized = make_image(im.w, im.h, im.c);
+    memcpy(sized.data, im.data, im.w * im.h * im.c * sizeof(float));
+  } else
+    sized = resize_image(im, w, h);
+  // covert image to torch tensor
+  c10::IntArrayRef s = {sized.c, sized.h, sized.w};
 
-    torch::Tensor tensor = torch::from_blob(sized.data, s);
+  torch::Tensor tensor = torch::from_blob(sized.data, s).clone();
 
-    tensor = tensor.to(torch::kCUDA);
+  tensor = tensor.to(torch::kCUDA);
 
-    Data_packet data_packet{i,       0,       0,       0, 0,
-                            sized.w, sized.h, sized.c, 0, tensor};
-    // std::cout << *sized.data << std::endl;
-    // push image to queue
-    std::unique_lock<std::mutex> lock(m_prio_image_queue_mutex);
-    m_prio_image_queue.push(data_packet);
-    lock.unlock();
-    free(im.data);
-    free(sized.data);
-    std::chrono::high_resolution_clock::time_point t1 =
-        std::chrono::high_resolution_clock::now();
-    frame_time_point[i] = {t1, t1};
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-  }
-  printf("push image exit\n");
+  Data_packet data_packet{frame_seq, 0,       0,       0, 0,
+                          sized.w,   sized.h, sized.c, 0, tensor};
+  // std::cout << *sized.data << std::endl;
+  // push image to queue
+
+  m_prio_image_queue.push(data_packet);
+
+  free(im.data);
+  free(sized.data);
 }
 
 void Master::m_pritition_image() {
+  Data_packet data_packet = m_prio_image_queue.top();
+  m_prio_image_queue.pop();
+  int frame_seq = data_packet.frame_seq;
+  int stage = data_packet.stage;
+  for (int i = 0; i < m_ftp_params[stage].partitions_h; ++i) {
+    for (int j = 0; j < m_ftp_params[stage].partitions_w; ++j) {
+      int task_id = m_ftp_params[stage].task_ids[i][j];
+      int dw1 = m_ftp_params[stage].input_tiles[task_id][0].w1;
+      int dw2 = m_ftp_params[stage].input_tiles[task_id][0].w2;
+      int dh1 = m_ftp_params[stage].input_tiles[task_id][0].h1;
+      int dh2 = m_ftp_params[stage].input_tiles[task_id][0].h2;
+      int c = m_ftp_params[stage].input_tiles[task_id][0].c;
+      // crop
+      torch::Tensor partition = data_packet.tensor
+                                    .index({at::indexing::Slice(0, c),
+                                            at::indexing::Slice(dh1, dh2 + 1),
+                                            at::indexing::Slice(dw1, dw2 + 1)})
+                                    .clone();
+      // flip
 
-  while (exit_flag) {
-    std::unique_lock<std::mutex> lock(m_prio_image_queue_mutex);
-    if (m_prio_image_queue.empty()) {
-      continue;
-    }
-    // queue is not empty
-    Data_packet data_packet = m_prio_image_queue.top();
-    m_prio_image_queue.pop();
-    lock.unlock();
-
-    int frame_seq = data_packet.frame_seq;
-    int stage = data_packet.stage;
-
-    for (int i = 0; i < m_ftp_params[stage].partitions_h; ++i) {
-      for (int j = 0; j < m_ftp_params[stage].partitions_w; ++j) {
-        int task_id = m_ftp_params[stage].task_ids[i][j];
-        int dw1 = m_ftp_params[stage].input_tiles[task_id][0].w1;
-        int dw2 = m_ftp_params[stage].input_tiles[task_id][0].w2;
-        int dh1 = m_ftp_params[stage].input_tiles[task_id][0].h1;
-        int dh2 = m_ftp_params[stage].input_tiles[task_id][0].h2;
-        int c = m_ftp_params[stage].input_tiles[task_id][0].c;
-        // crop
-        torch::Tensor partition =
-            data_packet.tensor
-                .index({at::indexing::Slice(0, c),
-                        at::indexing::Slice(dh1, dh2 + 1),
-                        at::indexing::Slice(dw1, dw2 + 1)})
-                .clone();
-        // flip
-
-        // assert(partition.sizes()[0] == c);
-        // assert(partition.sizes()[1] == dh2 - dh1 + 1);
-        // assert(partition.sizes()[2] == dw2 - dw1 + 1);
-        torch::Tensor fliped_partition;
-        switch (task_id) {
-        case 0:
-          fliped_partition = partition;
-          break;
-        case 1:
-          // flip lr
-          fliped_partition = partition.flip(2);
-          break;
-        case 2:
-          // flip ud
-          fliped_partition = partition.flip(1);
-          break;
-        case 3:
-          fliped_partition = partition.flip({1, 2});
-          break;
-        }
-
-        Data_packet new_data_packet{frame_seq,
-                                    task_id,
-                                    stage,
-                                    m_partition_params[stage].from,
-                                    m_partition_params[stage].to,
-                                    dw2 - dw1 + 1,
-                                    dh2 - dh1 + 1,
-                                    c,
-                                    0,
-                                    fliped_partition};
-        std::unique_lock<std::mutex> lock1(m_prio_task_queue_mutex);
-        m_prio_task_queue.push(new_data_packet);
+      // assert(partition.sizes()[0] == c);
+      // assert(partition.sizes()[1] == dh2 - dh1 + 1);
+      // assert(partition.sizes()[2] == dw2 - dw1 + 1);
+      torch::Tensor fliped_partition;
+      switch (task_id) {
+      case 0:
+        fliped_partition = partition;
+        break;
+      case 1:
+        // flip lr
+        fliped_partition = partition.flip(2);
+        break;
+      case 2:
+        // flip ud
+        fliped_partition = partition.flip(1);
+        break;
+      case 3:
+        fliped_partition = partition.flip({1, 2});
+        break;
       }
+
+      Data_packet new_data_packet{frame_seq,
+                                  task_id,
+                                  stage,
+                                  m_partition_params[stage].from,
+                                  m_partition_params[stage].to,
+                                  dw2 - dw1 + 1,
+                                  dh2 - dh1 + 1,
+                                  c,
+                                  0,
+                                  fliped_partition};
+      m_prio_task_queue.push(new_data_packet);
     }
   }
-  printf("partition_image thread end\n");
 }
 
 void Master::m_merge_partitions() {
 
-  while (exit_flag) {
-    int counts = 0;
-    std::unique_lock<std::mutex> lock(m_prio_partition_inference_result_mutex);
-    if (m_prio_partition_inference_result_queue.empty()) {
-      continue;
-    }
-    // auto start = std::chrono::high_resolution_clock::now();
-    Data_packet data_packet = m_prio_partition_inference_result_queue.front();
-    lock.unlock();
+  int counts = 0;
+  // auto start = std::chrono::high_resolution_clock::now();
+  Data_packet data_packet = m_prio_partition_inference_result_queue.front();
 
+  int frame_seq = data_packet.frame_seq;
+  int task_id = data_packet.task_id;
+  int stage = data_packet.stage;
+  int from = data_packet.from;
+  int to = data_packet.to;
+  // create merged image
+  c10::IntArrayRef s = {m_partition_params[stage].out_c,
+                        m_partition_params[stage].out_h,
+                        m_partition_params[stage].out_w};
+  torch::Tensor merged =
+      torch::rand(s, torch::TensorOptions().device(torch::kCUDA));
+  // assert(merged.sizes()[0] == m_net.layers[to].out_c);
+  // assert(merged.sizes()[1] == m_net.layers[to].out_h);
+  // assert(merged.sizes()[2] == m_net.layers[to].out_w);
+
+  while (counts < m_partition_params[stage].partitions) {
+    Data_packet data_packet = m_prio_partition_inference_result_queue.front();
+    m_prio_partition_inference_result_queue.pop();
+    ++counts;
     int frame_seq = data_packet.frame_seq;
     int task_id = data_packet.task_id;
     int stage = data_packet.stage;
     int from = data_packet.from;
     int to = data_packet.to;
-    // create merged image
-    c10::IntArrayRef s = {m_partition_params[stage].out_c,
-                          m_partition_params[stage].out_h,
-                          m_partition_params[stage].out_w};
-    torch::Tensor merged =
-        torch::rand(s, torch::TensorOptions().device(torch::kCUDA));
-    // assert(merged.sizes()[0] == m_net.layers[to].out_c);
-    // assert(merged.sizes()[1] == m_net.layers[to].out_h);
-    // assert(merged.sizes()[2] == m_net.layers[to].out_w);
+    torch::Tensor partition = data_packet.tensor;
+    int fused_layers = m_ftp_params[stage].fused_layers;
+    int dw1 = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].w1;
+    int dw2 = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].w2;
+    int dh1 = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].h1;
+    int dh2 = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].h2;
+    int w = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].w;
+    int h = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].h;
+    int c = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].c;
 
-    while (counts < m_partition_params[stage].partitions) {
-      std::unique_lock<std::mutex> lock1(
-          m_prio_partition_inference_result_mutex);
-      if (m_prio_partition_inference_result_queue.empty()) {
-        continue;
-      }
-      Data_packet data_packet = m_prio_partition_inference_result_queue.front();
-      if (counts != 0 && data_packet.frame_seq != frame_seq ||
-          data_packet.stage != stage) {
+    torch::Tensor cropped_partition =
+        partition
+            .index({at::indexing::Slice(0, c), at::indexing::Slice(0, h),
+                    at::indexing::Slice(0, w)})
+            .clone();
 
-        m_prio_partition_inference_result_queue.pop();
-        m_prio_partition_inference_result_queue.push(data_packet);
-        continue;
-      }
-
-      m_prio_partition_inference_result_queue.pop();
-      lock1.unlock();
-      ++counts;
-      int frame_seq = data_packet.frame_seq;
-      int task_id = data_packet.task_id;
-      int stage = data_packet.stage;
-      int from = data_packet.from;
-      int to = data_packet.to;
-      torch::Tensor partition = data_packet.tensor;
-
-      // assert(partition.sizes()[0] ==
-      // m_sub_nets[stage][task_id].layers[14].out_c);
-      // assert(partition.sizes()[1] ==
-      // m_sub_nets[stage][task_id].layers[14].out_h);
-      // assert(partition.sizes()[2] ==
-      // m_sub_nets[stage][task_id].layers[14].out_w);
-      int fused_layers = m_ftp_params[stage].fused_layers;
-      int dw1 = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].w1;
-      int dw2 = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].w2;
-      int dh1 = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].h1;
-      int dh2 = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].h2;
-      int w = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].w;
-      int h = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].h;
-      int c = m_ftp_params[stage].output_tiles[task_id][fused_layers - 1].c;
-      // crop padding
-      // create merged image
-
-      torch::Tensor cropped_partition =
-          partition
-              .index({at::indexing::Slice(0, c), at::indexing::Slice(0, h),
-                      at::indexing::Slice(0, w)})
-              .clone();
-      // flip data
-      // assert(cropped_partition.sizes()[0] == c);
-      // assert(cropped_partition.sizes()[1] == h);
-      // assert(cropped_partition.sizes()[2] == w);
-      torch::Tensor fliped_cropped_partition;
-      switch (task_id) {
-      case 0:
-        fliped_cropped_partition = cropped_partition;
-        break;
-      case 1:
-        // flip lr
-        fliped_cropped_partition = cropped_partition.flip(2);
-        break;
-      case 2:
-        // flip ud
-        fliped_cropped_partition = cropped_partition.flip(1);
-        break;
-      case 3:
-        fliped_cropped_partition = cropped_partition.flip({1, 2});
-        break;
-      }
-      // assert(cropped_partition.sizes()[0] == c);
-      // assert(cropped_partition.sizes()[1] == dh2 - dh1 + 1);
-      // assert(cropped_partition.sizes()[2] == dw2 - dw1 + 1);
-
-      // stitch partition to original image
-      merged.index({at::indexing::Slice(0, c),
-                    {at::indexing::Slice(dh1, dh1 + h)},
-                    {at::indexing::Slice(dw1, dw1 + w)}}) =
-          fliped_cropped_partition;
+    torch::Tensor fliped_cropped_partition;
+    switch (task_id) {
+    case 0:
+      fliped_cropped_partition = cropped_partition;
+      break;
+    case 1:
+      // flip lr
+      fliped_cropped_partition = cropped_partition.flip(2);
+      break;
+    case 2:
+      // flip ud
+      fliped_cropped_partition = cropped_partition.flip(1);
+      break;
+    case 3:
+      fliped_cropped_partition = cropped_partition.flip({1, 2});
+      break;
     }
+    assert(cropped_partition.sizes()[0] == c);
+    assert(cropped_partition.sizes()[1] == dh2 - dh1 + 1);
+    assert(cropped_partition.sizes()[2] == dw2 - dw1 + 1);
 
-    Data_packet new_data_packet{frame_seq,
-                                task_id,
-                                stage + 1,
-                                m_partition_params[stage + 1].from,
-                                m_partition_params[stage + 1].to,
-                                m_partition_params[stage].out_w,
-                                m_partition_params[stage].out_h,
-                                m_partition_params[stage].out_c,
-                                0,
-                                merged};
-    if (stage + 1 < m_stages - 1) {
-      std::unique_lock<std::mutex> lock2(m_prio_image_queue_mutex);
-      m_prio_image_queue.push(new_data_packet);
-    } else {
-      new_data_packet.tensor = new_data_packet.tensor.to(torch::kCPU);
-      std::unique_lock<std::mutex> lock2(m_prio_merged_result_mutex);
-      m_prio_merged_result_queue.push(new_data_packet);
-    }
-    // auto stop = std::chrono::high_resolution_clock::now();
-    // auto duration =
-    //     std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-
-    // std::cout << "merged function: " << duration.count()
-    //           << " milliseconds" << std::endl;
+    // stitch partition to original image
+    merged.index({at::indexing::Slice(0, c),
+                  {at::indexing::Slice(dh1, dh1 + h)},
+                  {at::indexing::Slice(dw1, dw1 + w)}}) =
+        fliped_cropped_partition;
   }
-  printf("merge partition thread end\n");
+
+  Data_packet new_data_packet{frame_seq,
+                              task_id,
+                              stage + 1,
+                              m_partition_params[stage + 1].from,
+                              m_partition_params[stage + 1].to,
+                              m_partition_params[stage].out_w,
+                              m_partition_params[stage].out_h,
+                              m_partition_params[stage].out_c,
+                              0,
+                              merged};
+  if (new_data_packet.stage < m_stages - 1) {
+    m_prio_image_queue.push(new_data_packet);
+  } else {
+    new_data_packet.task_id = 0;
+    m_prio_task_queue.push(new_data_packet);
+  }
 }
 // handle mutilple client
 int Master::m_recv_data_packet() {
@@ -681,53 +705,52 @@ int Master::m_recv_data_packet() {
   return 0;
 }
 
-int Master::m_send_data_packet() {
+int Master::m_send_data_packet(int client_fd) {
 
-  // create multiple filedes
-  std::vector<int> socks(m_server_addresses.size(), 0);
+  std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
+  Data_packet data_packet = m_prio_task_queue.top();
+  m_prio_task_queue.pop();
+  lock.unlock();
+  data_packet.tensor = data_packet.tensor.to(torch::kCPU);
+  void *serialized_data_packet = serialize_data_packet(data_packet);
+  send(client_fd, serialized_data_packet,
+       data_packet.tensor_size + sizeof(int) * 9, 0);
+  // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
+  //        data_packet.stage, data_packet.task_id);
+  delete[](char *) serialized_data_packet;
 
-  // connections
-  for (int i = 0; i < m_server_addresses.size(); ++i) {
-    struct sockaddr_in servername;
-    /* Create the socket. */
-    socks[i] = socket(AF_INET, SOCK_STREAM, 0);
-    init_sockaddr(&servername, m_server_addresses[i].ip.c_str(),
-                  m_server_addresses[i].port);
-    if (socks[i] < 0) {
-      perror("socket (client)");
-      exit(EXIT_FAILURE);
-    }
-    /* Connect to the server. */
-    while (1) {
-      if (0 > connect(socks[i], (struct sockaddr *)&servername,
-                      sizeof(servername))) {
-        // perror("connect (client)");
-        continue;
-      }
-      break;
-    }
-  }
-  int target_sock = 0;
+  printf("Hello message sent\n");
 
-  while (exit_flag) {
+  // valread = read(client_fd, buffer, 1024);
+  // printf("%s\n", buffer);
 
-    std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
-    if (m_prio_task_queue.empty()) {
-      continue;
-    }
-    Data_packet data_packet = m_prio_task_queue.top();
-    m_prio_task_queue.pop();
-    data_packet.tensor = data_packet.tensor.to(torch::kCPU);
-    void *serialized_data_packet = serialize_data_packet(data_packet);
-    send(socks[target_sock % m_server_addresses.size()], serialized_data_packet,
-         data_packet.tensor_size + sizeof(int) * 9, 0);
-    // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
-    //        data_packet.stage, data_packet.task_id);
-    delete[] (char *)serialized_data_packet;
-    target_sock++;
-  }
-
-  printf("send thread end\n");
+  int metadata_buffer[9];
+  // Data_packet recv_data_packet;
+  int valread = read(client_fd, metadata_buffer, sizeof(int) * 9);
+  data_packet.frame_seq = metadata_buffer[0];
+  data_packet.task_id = metadata_buffer[1];
+  data_packet.stage = metadata_buffer[2];
+  data_packet.from = metadata_buffer[3];
+  data_packet.to = metadata_buffer[4];
+  data_packet.w = metadata_buffer[5];
+  data_packet.h = metadata_buffer[6];
+  data_packet.c = metadata_buffer[7];
+  data_packet.tensor_size = metadata_buffer[8];
+  char tensor_buffer[data_packet.tensor_size];
+  recv(client_fd, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
+  std::string s(tensor_buffer, data_packet.tensor_size);
+  std::istringstream stream_{s};
+  // buffer to stream
+  torch::Tensor tensor;
+  torch::load(tensor, stream_);
+  // create Data_packet
+  data_packet.tensor = tensor;
+  std::unique_lock<std::mutex> lock1(m_prio_partition_inference_result_mutex);
+  // push to queue
+  m_prio_partition_inference_result_queue.push(data_packet);
+  lock1.unlock();
+  printf("master recived\n");
+  // closing the connected socket
 
   return 0;
 }
@@ -748,129 +771,9 @@ inline static void *serialize_data_packet(Data_packet &data_packet) {
 }
 // inference final stage
 void Master::m_inference() {
-  int completed_frames = 0;
-  while (exit_flag) {
-    std::unique_lock<std::mutex> lock(m_prio_merged_result_mutex);
-    if (m_prio_merged_result_queue.empty()) {
-      continue;
-    }
-
-    Data_packet data_packet = m_prio_merged_result_queue.top();
-    m_prio_merged_result_queue.pop();
-    lock.unlock();
-
-    float *X = data_packet.tensor.data_ptr<float>();
-    // layer merged_layer =
-    //     m_net.layers[m_partition_params[data_packet.stage - 1].to];
-    // for (int i = 0; i < data_packet.h; ++i) {
-    //   for (int j = 0; j < data_packet.w; ++j) {
-    //     std::string a_ = std::to_string(
-    //         *(m_net.layers[m_partition_params[data_packet.stage - 1].to - 1]
-    //               .output +
-    //           i * data_packet.w + j));
-    //     std::cout << a_ << " ";
-    //   }
-    //   std::cout << std::endl;
-    // }
-    // std::cout << std::endl << std::endl;
-    // for (int i = 0; i < data_packet.h; ++i) {
-    //   for (int j = 0; j < data_packet.w; ++j) {
-    //     std::string a_ = std::to_string(*(
-    //         m_net.layers[m_partition_params[data_packet.stage - 1].to].output
-    //         + i * data_packet.w + j));
-    //     std::cout << a_ << " ";
-    //   }
-    //   std::cout << std::endl;
-    // }
-
-    float *out = network_predict(m_last_stage_net, X);
-
-    std::chrono::high_resolution_clock::time_point t2 =
-        std::chrono::high_resolution_clock::now();
-    frame_time_point[data_packet.frame_seq].second = t2;
-
-    // layer l = m_last_stage_net.layers[m_last_stage_net.n - 1];
-    // assert(data_packet.tensor.sizes()[0] == m_last_stage_net.c);
-    // assert(data_packet.tensor.sizes()[1] == m_last_stage_net.h);
-    // assert(data_packet.tensor.sizes()[2] == m_last_stage_net.w);
-
-    // for (int i = 0; i < l.out_w * l.out_h * l.out_c; ++i) {
-    //   std::string a = std::to_string(*(m_net.layers[m_net.n - 1].output +
-    //   i)); std::string b = std::to_string(*(out + i)); std::cout << a << " "
-    //   + std::to_string(i) + " " << b << std::endl; assert(a.substr(0, 4) ==
-    //   b.substr(0, 4));
-    // }
-
-    // auto img = load_image("./data/dog.jpg");
-    // image im;
-    // im.c = img.c;
-    // im.data = img.data;
-    // im.h = img.h;
-    // im.w = img.w;
-
-    // image sized;
-
-    // if (m_net.w == im.w && m_net.h == im.h) {
-    //   sized = make_image(im.w, im.h, im.c);
-    //   memcpy(sized.data, im.data, im.w * im.h * im.c * sizeof(float));
-    // } else
-    //   sized = resize_image(im, m_net.w, m_net.h);
-
-    // l = m_last_stage_net.layers[m_last_stage_net.n - 1];
-    // float thresh = 0.5;
-    // int nboxes = 0;
-    // int letterbox = 0;
-    // float hier_thresh = 0.5;
-    // float nms = .4;
-    // detection *dets = get_network_boxes(&m_last_stage_net, im.w, im.h,
-    // thresh,
-    //                                     hier_thresh, 0, 1, &nboxes,
-    //                                     letterbox);
-    // if (nms)
-    //   do_nms_sort(dets, nboxes, l.classes, nms);
-
-    // std::vector<bbox_t> bbox_vec;
-
-    // for (int i = 0; i < nboxes; ++i) {
-    //   box b = dets[i].bbox;
-    //   int const obj_id = max_index(dets[i].prob, l.classes);
-    //   float const prob = dets[i].prob[obj_id];
-
-    //   if (prob > thresh) {
-    //     bbox_t bbox;
-    //     bbox.x = std::max((double)0, (b.x - b.w / 2.) * im.w);
-    //     bbox.y = std::max((double)0, (b.y - b.h / 2.) * im.h);
-    //     bbox.w = b.w * im.w;
-    //     bbox.h = b.h * im.h;
-    //     bbox.obj_id = obj_id;
-    //     bbox.prob = prob;
-    //     bbox.track_id = 0;
-    //     bbox.frames_counter = 0;
-    //     bbox.x_3d = NAN;
-    //     bbox.y_3d = NAN;
-    //     bbox.z_3d = NAN;
-
-    //     bbox_vec.push_back(bbox);
-    //   }
-    // }
-
-    // free_detections(dets, nboxes);
-    // if (sized.data)
-    //   free(sized.data);
-
-    // // #ifdef GPU
-    // //     if (cur_gpu_id != old_gpu_index)
-    // //         cudaSetDevice(old_gpu_index);
-    // // #endif
-    // std::vector<bbox_t> result_vec = bbox_vec;
-    // free(img.data);
-    // auto obj_names = objects_names_from_file("./data/coco.names");
-    // show_console_result(result_vec, obj_names, 0);
-    ++completed_frames;
-    if (completed_frames == m_frames) {
-      exit_flag = 0;
-      printf("master exit\n");
-      break;
-    }
-  }
+  Data_packet data_packet = m_prio_task_queue.top();
+  m_prio_task_queue.pop();
+  torch::Tensor cpu_tensor = data_packet.tensor.to(torch::kCPU);
+  float *X = cpu_tensor.data_ptr<float>();
+  float *out = network_predict(m_last_stage_net, X);
 }

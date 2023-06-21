@@ -5,52 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "master",
-            "type": "cppdbg",
+            "type": "lldb",
             "request": "launch",
+            "name": "Master",
             "program": "${workspaceFolder}/install/bin/main",
-            "args": ["${workspaceFolder}/install/launch_local.json", "master"],
-            "cwd": "${workspaceFolder}/install/bin",
-            "stopAtEntry": false,
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-                {
-                    "description": "Set Disassembly Flavor to Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ]
+            "args": ["../launch.json", "master"],
+            "cwd": "${workspaceFolder}/install/bin"
         },
         {
-            "name": "worker",
-            "type": "cppdbg",
+            "type": "lldb",
             "request": "launch",
+            "name": "Worker",
             "program": "${workspaceFolder}/install/bin/main",
-            "args": ["${workspaceFolder}/install/launch_local.json", "worker", "0"],
-            "cwd": "${workspaceFolder}/install/bin",
-            "stopAtEntry": false,
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-                {
-                    "description": "Set Disassembly Flavor to Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ]
+            "args": ["../launch.json", "worker", "0"],
+            "cwd": "${workspaceFolder}/install/bin"
         }
         
     ]

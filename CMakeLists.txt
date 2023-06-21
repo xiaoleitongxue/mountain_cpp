@@ -5,7 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 
 # find package with config mode
-set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/share/cmake/Torch)
+set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/torch/share/cmake/Torch)
 find_package(Torch REQUIRED CONFIGS TorchConfig.cmake)
 
 set(Darknet_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/share/darknet)
@@ -62,10 +62,10 @@ target_link_libraries(
 # install executable
 # set(CMAKE_INSTALL_RPATH ${PROJECT_SOURCE_DIR}/3rdparty/lib)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/install)
-install(TARGETS main DESTINATION bin)
+# install(TARGETS main DESTINATION bin)
+# install(FILES  DESTINATION lib)
 # SET_TARGET_PROPERTIES(main
 #     PROPERTIES INSTALL_RPATH "$ORIGIN;../lib")
-# install(FILES ${CMAKE_CURRENT_LIST_DIR}/build/main DESTINATION bin)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/build/main DESTINATION bin)
 # install(FILES Darknet::dark DESTINATION lib)
 install(IMPORTED_RUNTIME_ARTIFACTS Darknet::dark DESTINATION lib)
-install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/torch/lib DESTINATION .)

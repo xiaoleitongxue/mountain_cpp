@@ -6,13 +6,9 @@
 #include <string>
 #include <thread>
 #include <unistd.h>
+#include <vector>
 
 
-
-using namespace std::chrono;
-std::vector<std::pair<std::chrono::high_resolution_clock::time_point,
-                      std::chrono::high_resolution_clock::time_point>>
-    frame_time_point;
 int main(int argc, char *argv[]) {
   std::string launch_json = argv[1];
   // prase json
@@ -34,10 +30,7 @@ int main(int argc, char *argv[]) {
   }
   std::vector<ftp_parameter> ftp_params =
       perform_ftp(launch_param.partition_params, launch_param.stages, net);
-  frame_time_point =
-      std::vector<std::pair<std::chrono::high_resolution_clock::time_point,
-                            std::chrono::high_resolution_clock::time_point>>(
-          launch_param.frames);
+
   std::string worker_type = argv[2];
   if (worker_type == "master") {
     network last_stage_net = parse_network_cfg_custom_whc(
@@ -58,25 +51,100 @@ int main(int argc, char *argv[]) {
                   ftp_params,
                   launch_param.worker_addr};
 
-    // start worker thread
-    std::thread push_image_thread(&Master::m_push_image, &master);
-    std::thread partition_image_thread(&Master::m_pritition_image, &master);
-    std::thread inference_thread(&Master::m_inference, &master);
-    std::thread send_data_packet_thread(&Master::m_send_data_packet, &master);
-    std::thread recv_data_packet_thread(&Master::m_recv_data_packet, &master);
-    std::thread merge_partition_thread(&Master::m_merge_partitions, &master);
+    std::vector<int> client_fds;
 
-    push_image_thread.join();
-    partition_image_thread.join();
-    merge_partition_thread.join();
-    inference_thread.join();
-    send_data_packet_thread.join();
-    // recv_data_packet_thread.join();
+    for (int i = 0; i < launch_param.workers; ++i) {
+      int status, valread, client_fd;
+      struct sockaddr_in serv_addr;
+
+      if ((client_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        printf("\n Socket creation error \n");
+        return -1;
+      }
+
+      serv_addr.sin_family = AF_INET;
+      serv_addr.sin_port = htons(launch_param.worker_addr[i].port);
+
+      // Convert IPv4 and IPv6 addresses from text to binary
+      // form
+      if (inet_pton(AF_INET, launch_param.worker_addr[i].ip.c_str(),
+                    &serv_addr.sin_addr) <= 0) {
+        printf("\nInvalid address/ Address not supported \n");
+        return -1;
+      }
+
+      if ((status = connect(client_fd, (struct sockaddr *)&serv_addr,
+                            sizeof(serv_addr))) < 0) {
+        printf("\nConnection Failed \n");
+        return -1;
+      }
+      client_fds.push_back(client_fd);
+    }
+    std::vector<int> fenpei(launch_param.workers, 4 / launch_param.workers);
+    if (4 % launch_param.workers != 0) {
+      fenpei[launch_param.workers - 1]++;
+    }
+
+    // create thread pool
+    std::vector<std::thread> send_data_packet_threads;
+    // for (int j = 0; j < fenpei.size(); ++j) {
+    //   send_data_packet_threads.push_back(std::vector<std::thread>(fenpei[j]));
+    // }
+
     for (int i = 0; i < launch_param.frames; ++i) {
-      auto diff = duration_cast<std::chrono::milliseconds>(
-          frame_time_point[i].second - frame_time_point[i].first);
-      std::cout << "frame Time " << i << " " << diff.count() << " milliseconds"
-                << std::endl;
+      auto start = std::chrono::high_resolution_clock::now();
+      master.m_push_image(i);
+      master.m_pritition_image();
+      // inference partition
+      for (int j = 0; j < fenpei.size(); ++j) {
+        for (int k = 0; k < fenpei[j]; ++k) {
+          std::thread send_data_packet_thread(&Master::m_send_data_packet,
+                                              &master, client_fds[j]);
+          send_data_packet_threads.push_back(
+              std::move(send_data_packet_thread));
+        }
+        // master.m_send_data_packet(client_fds[i]);
+      }
+
+      for (std::thread &th : send_data_packet_threads) {
+        // If thread Object is Joinable then Join that thread.
+        if (th.joinable())
+          th.join();
+      }
+
+      // merged partition
+      master.m_merge_partitions();
+      // partition
+      master.m_pritition_image();
+      // inference partition
+      for (int j = 0; j < fenpei.size(); ++j) {
+        for (int k = 0; k < fenpei[j]; ++k) {
+          std::thread send_data_packet_thread(&Master::m_send_data_packet,
+                                              &master, client_fds[j]);
+          send_data_packet_threads.push_back(
+              std::move(send_data_packet_thread));
+        }
+        // master.m_send_data_packet(client_fds[i]);
+      }
+
+      for (std::thread &th : send_data_packet_threads) {
+        // If thread Object is Joinable then Join that thread.
+        if (th.joinable())
+          th.join();
+      }
+      // merge
+      master.m_merge_partitions();
+      // inference
+      master.m_inference();
+
+      auto stop = std::chrono::high_resolution_clock::now();
+      auto duration =
+          std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+      std::cout << "Time taken by frame " << i << ":" << duration.count()
+                << " milliseconds" << std::endl;
+    }
+    for (int i = 0; i < client_fds.size(); ++i) {
+      close(client_fds[i]);
     }
   } else if (worker_type == "worker") {
     std::vector<std::vector<network>> sub_nets(launch_param.stages - 1);
@@ -107,11 +175,15 @@ int main(int argc, char *argv[]) {
     // worker.m_receive_data_packet();
     // start worker thread
     std::thread recv_data_packet_thread(&Worker::m_recv_data_packet, &worker);
-    std::thread send_data_packet_thread(&Worker::m_send_data_packet, &worker);
+    // std::thread send_data_packet_thread(&Worker::m_send_data_packet,
+    // &worker);
     std::thread inference_thread(&Worker::m_inference, &worker);
 
     inference_thread.join();
     recv_data_packet_thread.join();
-    send_data_packet_thread.join();
+    // send_data_packet_thread.join();
   }
+  free(cfgfile);
+  free(weights_file);
+  return 0;
 }

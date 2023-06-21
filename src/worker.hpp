@@ -5,32 +5,30 @@
 #include <arpa/inet.h>
 #include <c10/core/DeviceType.h>
 
+
 #include <data_packet.hpp>
 #include <torch/serialize/input-archive.h>
 #include <torch/torch.h>
 
 #include "partition_model.hpp"
+#include <darknet.h>
 #include "yolo_v2_class.hpp"
 #include <mutex>
 
 extern std::vector<std::pair<std::chrono::high_resolution_clock::time_point,
                              std::chrono::high_resolution_clock::time_point>>
     frame_time_point;
-class Compare
-{
+class Compare {
 public:
-  bool operator()(const Data_packet &a, const Data_packet &b)
-  {
-    if (a.frame_seq == b.frame_seq)
-    {
+  bool operator()(const Data_packet &a, const Data_packet &b) {
+    if (a.frame_seq == b.frame_seq) {
       return a.stage >= b.stage;
     }
     return a.frame_seq > b.frame_seq;
   }
 };
 
-class Worker
-{
+class Worker {
 private:
   int m_worker_id;
   std::string m_ip;
@@ -48,7 +46,8 @@ private:
   std::thread m_receive_data_packet_thread;
 
 public:
-  Worker(int worker_id, std::string ip, int port, std::vector<std::vector<network>> sub_nets,
+  Worker(int worker_id, std::string ip, int port,
+         std::vector<std::vector<network>> sub_nets,
          struct server_address master_addr);
   Worker() = delete;
   Worker(const Worker &) = delete;
@@ -58,8 +57,7 @@ public:
   int m_send_data_packet();
 };
 
-class Master
-{
+class Master {
 private:
   std::string m_ip;
   int m_port;
@@ -85,7 +83,7 @@ private:
   std::vector<partition_parameter> m_partition_params;
   std::vector<ftp_parameter> m_ftp_params;
   std::vector<server_address> m_server_addresses;
-  std::vector<std::vector<network>> m_sub_nets;
+  // std::vector<std::vector<network>> m_sub_nets;
 
   std::thread m_pritition_image_thread;
   std::thread m_merge_partitions_thread;
@@ -105,9 +103,9 @@ public:
   void m_pritition_image();
   void m_merge_partitions();
   void m_inference();
-  int m_send_data_packet();
+  int m_send_data_packet(int client_fd);
   int m_recv_data_packet();
-  void m_push_image();
+  void m_push_image(int frame_seq);
   static LIB_API image_t load_image(std::string image_filename);
 };
 
