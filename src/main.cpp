@@ -87,9 +87,6 @@ int main(int argc, char *argv[]) {
 
     // create thread pool
     std::vector<std::thread> send_data_packet_threads;
-    // for (int j = 0; j < fenpei.size(); ++j) {
-    //   send_data_packet_threads.push_back(std::vector<std::thread>(fenpei[j]));
-    // }
 
     for (int i = 0; i < launch_param.frames; ++i) {
       auto start = std::chrono::high_resolution_clock::now();
@@ -97,12 +94,9 @@ int main(int argc, char *argv[]) {
       master.m_pritition_image();
       // inference partition
       for (int j = 0; j < fenpei.size(); ++j) {
-        for (int k = 0; k < fenpei[j]; ++k) {
-          std::thread send_data_packet_thread(&Master::m_send_data_packet,
-                                              &master, client_fds[j]);
-          send_data_packet_threads.push_back(
-              std::move(send_data_packet_thread));
-        }
+        std::thread send_data_packet_thread(&Master::m_send_data_packet,
+                                            &master, client_fds[j], fenpei[j]);
+        send_data_packet_threads.push_back(std::move(send_data_packet_thread));
         // master.m_send_data_packet(client_fds[i]);
       }
 
@@ -118,12 +112,9 @@ int main(int argc, char *argv[]) {
       master.m_pritition_image();
       // inference partition
       for (int j = 0; j < fenpei.size(); ++j) {
-        for (int k = 0; k < fenpei[j]; ++k) {
-          std::thread send_data_packet_thread(&Master::m_send_data_packet,
-                                              &master, client_fds[j]);
-          send_data_packet_threads.push_back(
-              std::move(send_data_packet_thread));
-        }
+        std::thread send_data_packet_thread(&Master::m_send_data_packet,
+                                            &master, client_fds[j], fenpei[j]);
+        send_data_packet_threads.push_back(std::move(send_data_packet_thread));
         // master.m_send_data_packet(client_fds[i]);
       }
 

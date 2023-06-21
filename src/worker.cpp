@@ -319,10 +319,10 @@ int Worker::m_recv_data_packet() {
       printf("New connection , socket fd is %d , ip is : %s , port : %d \n ",
              new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
 
-      // send new connection greeting message
-      if (send(new_socket, message, strlen(message), 0) != strlen(message)) {
-        perror("send");
-      }
+      // // send new connection greeting message
+      // if (send(new_socket, message, strlen(message), 0) != strlen(message)) {
+      //   perror("send");
+      // }
 
       puts("Welcome message sent successfully");
 
@@ -384,7 +384,7 @@ int Worker::m_recv_data_packet() {
         m_prio_result_queue.pop();
         lock1.unlock();
         void *serialized_data_packet = serialize_data_packet(data_packet);
-        send(new_socket, serialized_data_packet,
+        send(sd, serialized_data_packet,
              data_packet.tensor_size + sizeof(int) * 9, 0);
         // free buffer
         delete[](char *) serialized_data_packet;
@@ -426,7 +426,7 @@ LIB_API image_t Master::load_image(std::string image_filename) {
 }
 
 void Master::m_push_image(int frame_seq) {
-  std::string image_path = "../dog.jpg";
+  std::string image_path = "../data/dog.jpg";
   int w = m_partition_params[0].in_w;
   int h = m_partition_params[0].in_h;
   int c = m_partition_params[0].in_c;
@@ -705,51 +705,56 @@ int Master::m_recv_data_packet() {
   return 0;
 }
 
-int Master::m_send_data_packet(int client_fd) {
-
-  std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
-  Data_packet data_packet = m_prio_task_queue.top();
-  m_prio_task_queue.pop();
-  lock.unlock();
-  data_packet.tensor = data_packet.tensor.to(torch::kCPU);
-  void *serialized_data_packet = serialize_data_packet(data_packet);
-  send(client_fd, serialized_data_packet,
-       data_packet.tensor_size + sizeof(int) * 9, 0);
-  // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
-  //        data_packet.stage, data_packet.task_id);
-  delete[](char *) serialized_data_packet;
+int Master::m_send_data_packet(int client_fd, int num) {
+  for (int i = 0; i < num; ++i) {
+    std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
+    Data_packet data_packet = m_prio_task_queue.top();
+    m_prio_task_queue.pop();
+    lock.unlock();
+    data_packet.tensor = data_packet.tensor.to(torch::kCPU);
+    void *serialized_data_packet = serialize_data_packet(data_packet);
+    send(client_fd, serialized_data_packet,
+         data_packet.tensor_size + sizeof(int) * 9, 0);
+    // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
+    //        data_packet.stage, data_packet.task_id);
+    delete[](char *) serialized_data_packet;
+  
 
   printf("Hello message sent\n");
 
   // valread = read(client_fd, buffer, 1024);
   // printf("%s\n", buffer);
 
-  int metadata_buffer[9];
-  // Data_packet recv_data_packet;
-  int valread = read(client_fd, metadata_buffer, sizeof(int) * 9);
-  data_packet.frame_seq = metadata_buffer[0];
-  data_packet.task_id = metadata_buffer[1];
-  data_packet.stage = metadata_buffer[2];
-  data_packet.from = metadata_buffer[3];
-  data_packet.to = metadata_buffer[4];
-  data_packet.w = metadata_buffer[5];
-  data_packet.h = metadata_buffer[6];
-  data_packet.c = metadata_buffer[7];
-  data_packet.tensor_size = metadata_buffer[8];
-  char tensor_buffer[data_packet.tensor_size];
-  recv(client_fd, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
-  std::string s(tensor_buffer, data_packet.tensor_size);
-  std::istringstream stream_{s};
-  // buffer to stream
-  torch::Tensor tensor;
-  torch::load(tensor, stream_);
-  // create Data_packet
-  data_packet.tensor = tensor;
-  std::unique_lock<std::mutex> lock1(m_prio_partition_inference_result_mutex);
-  // push to queue
-  m_prio_partition_inference_result_queue.push(data_packet);
-  lock1.unlock();
-  printf("master recived\n");
+
+    int metadata_buffer[9];
+    // Data_packet recv_data_packet;
+    int valread = read(client_fd, metadata_buffer, sizeof(int) * 9);
+    data_packet.frame_seq = metadata_buffer[0];
+    data_packet.task_id = metadata_buffer[1];
+    data_packet.stage = metadata_buffer[2];
+    data_packet.from = metadata_buffer[3];
+    data_packet.to = metadata_buffer[4];
+    data_packet.w = metadata_buffer[5];
+    data_packet.h = metadata_buffer[6];
+    data_packet.c = metadata_buffer[7];
+    data_packet.tensor_size = metadata_buffer[8];
+    char tensor_buffer[data_packet.tensor_size];
+    recv(client_fd, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
+    std::string s(tensor_buffer, data_packet.tensor_size);
+    std::istringstream stream_{s};
+    // buffer to stream
+    torch::Tensor tensor;
+    torch::load(tensor, stream_);
+    // create Data_packet
+    data_packet.tensor = tensor;
+    std::unique_lock<std::mutex> lock1(m_prio_partition_inference_result_mutex);
+    // push to queue
+    m_prio_partition_inference_result_queue.push(data_packet);
+    lock1.unlock();
+    printf("master recived\n");
+  }
+
+  
   // closing the connected socket
 
   return 0;

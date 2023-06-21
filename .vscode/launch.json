@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Master",
             "program": "${workspaceFolder}/install/bin/main",
-            "args": ["../launch.json", "master"],
+            "args": ["../data/launch.json", "master"],
             "cwd": "${workspaceFolder}/install/bin"
         },
         {
@@ -17,7 +17,7 @@
             "request": "launch",
             "name": "Worker",
             "program": "${workspaceFolder}/install/bin/main",
-            "args": ["../launch.json", "worker", "0"],
+            "args": ["../data/launch.json", "worker", "0"],
             "cwd": "${workspaceFolder}/install/bin"
         }
         

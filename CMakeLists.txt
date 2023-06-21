@@ -63,9 +63,15 @@ target_link_libraries(
 # set(CMAKE_INSTALL_RPATH ${PROJECT_SOURCE_DIR}/3rdparty/lib)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/install)
 # install(TARGETS main DESTINATION bin)
-# install(FILES  DESTINATION lib)
-# SET_TARGET_PROPERTIES(main
-#     PROPERTIES INSTALL_RPATH "$ORIGIN;../lib")
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/build/main DESTINATION bin)
-# install(FILES Darknet::dark DESTINATION lib)
+# # install(FILES  DESTINATION lib)
+# # SET_TARGET_PROPERTIES(main
+# #     PROPERTIES INSTALL_RPATH "$ORIGIN;../lib")
+# # install(FILES ${CMAKE_CURRENT_LIST_DIR}/build/main DESTINATION bin)
+# # install(FILES Darknet::dark DESTINATION lib)
+
 install(IMPORTED_RUNTIME_ARTIFACTS Darknet::dark DESTINATION lib)
+# install(FILES "${TORCH_LIBRARIES}" DESTINATION lib)
+# install(TARGETS "${TORCH_LIBRARIES}" ARCHIVE DESTINATION lib)
+install(TARGETS main RUNTIME DESTINATION bin)
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/torch/lib DESTINATION lib/libtorch)
+SET_TARGET_PROPERTIES(main PROPERTIES INSTALL_RPATH "$ORIGIN;../lib/libtorch/lib;../lib")
