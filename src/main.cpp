@@ -51,8 +51,8 @@ int main(int argc, char *argv[]) {
                   ftp_params,
                   launch_param.worker_addr};
 
+    // 每个worker对应一个连接
     std::vector<int> client_fds;
-
     for (int i = 0; i < launch_param.workers; ++i) {
       int status, valread, client_fd;
       struct sockaddr_in serv_addr;
@@ -80,6 +80,7 @@ int main(int argc, char *argv[]) {
       }
       client_fds.push_back(client_fd);
     }
+    // 每个阶段共有4个task， 计算每个worker分配到几个task
     std::vector<int> fenpei(launch_param.workers, 4 / launch_param.workers);
     if (4 % launch_param.workers != 0) {
       fenpei[launch_param.workers - 1]++;
@@ -97,7 +98,6 @@ int main(int argc, char *argv[]) {
         std::thread send_data_packet_thread(&Master::m_send_data_packet,
                                             &master, client_fds[j], fenpei[j]);
         send_data_packet_threads.push_back(std::move(send_data_packet_thread));
-        // master.m_send_data_packet(client_fds[i]);
       }
 
       for (std::thread &th : send_data_packet_threads) {
@@ -115,7 +115,6 @@ int main(int argc, char *argv[]) {
         std::thread send_data_packet_thread(&Master::m_send_data_packet,
                                             &master, client_fds[j], fenpei[j]);
         send_data_packet_threads.push_back(std::move(send_data_packet_thread));
-        // master.m_send_data_packet(client_fds[i]);
       }
 
       for (std::thread &th : send_data_packet_threads) {
@@ -137,9 +136,10 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < client_fds.size(); ++i) {
       close(client_fds[i]);
     }
+
   } else if (worker_type == "worker") {
     std::vector<std::vector<network>> sub_nets(launch_param.stages - 1);
-
+    // generate sub network
     for (int i = 0; i < launch_param.stages - 1; ++i) {
       for (int j = 0; j < launch_param.partition_params[i].partitions; ++j) {
         network sub_net = parse_network_cfg_custom_whc(
@@ -166,15 +166,14 @@ int main(int argc, char *argv[]) {
     // worker.m_receive_data_packet();
     // start worker thread
     std::thread recv_data_packet_thread(&Worker::m_recv_data_packet, &worker);
-    // std::thread send_data_packet_thread(&Worker::m_send_data_packet,
-    // &worker);
+
     std::thread inference_thread(&Worker::m_inference, &worker);
 
     inference_thread.join();
     recv_data_packet_thread.join();
-    // send_data_packet_thread.join();
   }
   free(cfgfile);
   free(weights_file);
+
   return 0;
 }

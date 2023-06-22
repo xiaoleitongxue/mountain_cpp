@@ -100,6 +100,7 @@ public:
   Master() = delete;
   Master(const Master &) = delete;
   Master(const Master &&) = delete;
+  ~ Master();
   void m_pritition_image();
   void m_merge_partitions();
   void m_inference();

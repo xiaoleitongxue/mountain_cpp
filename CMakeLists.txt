@@ -69,9 +69,23 @@ set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/install)
 # # install(FILES ${CMAKE_CURRENT_LIST_DIR}/build/main DESTINATION bin)
 # # install(FILES Darknet::dark DESTINATION lib)
 
+# install darknet shared library
 install(IMPORTED_RUNTIME_ARTIFACTS Darknet::dark DESTINATION lib)
-# install(FILES "${TORCH_LIBRARIES}" DESTINATION lib)
-# install(TARGETS "${TORCH_LIBRARIES}" ARCHIVE DESTINATION lib)
+
+# install libtorch shared library
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/lib DESTINATION ./)
+
+# set where main to find shared library
+SET_TARGET_PROPERTIES(main PROPERTIES INSTALL_RPATH "$ORIGIN;../lib")
+# install executable
 install(TARGETS main RUNTIME DESTINATION bin)
-install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/torch/lib DESTINATION lib/libtorch)
-SET_TARGET_PROPERTIES(main PROPERTIES INSTALL_RPATH "$ORIGIN;../lib/libtorch/lib;../lib")
+
+# install image
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/data/dog.jpg DESTINATION data)
+
+
+# install config
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/config DESTINATION ./)
+
+# install weights
+# install(FILES ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/data/dog.jpg DESTINATION data)

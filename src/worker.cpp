@@ -782,3 +782,7 @@ void Master::m_inference() {
   float *X = cpu_tensor.data_ptr<float>();
   float *out = network_predict(m_last_stage_net, X);
 }
+
+Master::~Master(){
+  free_network(m_last_stage_net);
+}
