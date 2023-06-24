@@ -88,4 +88,4 @@ install(FILES ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/data/dog.jpg DESTINATIO
 install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/config DESTINATION ./)
 
 # install weights
-# install(FILES ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/data/dog.jpg DESTINATION data)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/data/yolov2-tiny.weights DESTINATION data)
