@@ -18,5 +18,4 @@ build/
 libtorch/
 main
 *whl
-3rdparty/
 install/
