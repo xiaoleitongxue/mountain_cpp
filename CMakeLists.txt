@@ -5,7 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 
 # find package with config mode
-set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/torch/share/cmake/Torch)
+set(Torch_DIR /home/nx/.local/lib/python3.6/site-packages/torch/share/cmake/Torch)
 find_package(Torch REQUIRED CONFIGS TorchConfig.cmake)
 
 set(Darknet_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/share/darknet)
@@ -72,8 +72,8 @@ set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/install)
 # install darknet shared library
 install(IMPORTED_RUNTIME_ARTIFACTS Darknet::dark DESTINATION lib)
 
-# install libtorch shared library
-install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/lib DESTINATION ./)
+# # install libtorch shared library
+# install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/lib DESTINATION ./)
 
 # set where main to find shared library
 SET_TARGET_PROPERTIES(main PROPERTIES INSTALL_RPATH "$ORIGIN;../lib")
