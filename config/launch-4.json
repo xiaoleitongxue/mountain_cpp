@@ -1,0 +1,55 @@
+{
+  "cfg": "../config/yolov2-tiny.cfg",
+  "weights": "../data/yolov2-tiny.weights",
+  "filename": "../data/dog.jpg",
+  "workers": 4,
+  "frames": 500,
+  "stages": 3,
+  "partition_params": [
+    {
+      "partition_w": 2,
+      "partition_h": 2,
+      "partitions": 4,
+      "from": 0,
+      "to": 5
+    },
+    {
+      "partition_w": 2,
+      "partition_h": 2,
+      "partitions": 4,
+      "from": 6,
+      "to": 10
+    },
+    {
+      "partition_w": 1,
+      "partition_h": 1,
+      "partitions": 1,
+      "from": 11,
+      "to": 15
+    }
+  ],
+  "master_addr": [
+    {
+      "ip": "192.168.1.151",
+      "port": 5555
+    }
+  ],
+  "worker_addr": [
+    {
+      "ip": "192.168.1.152",
+      "port": 5556
+    },
+    {
+      "ip": "192.168.1.153",
+      "port": 5556
+    },
+    {
+      "ip": "192.168.1.154",
+      "port": 5556
+    },
+    {
+      "ip": "192.168.1.155",
+      "port": 5556
+    }
+  ]
+}

@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
                   launch_param.worker_addr};
 
     // start worker thread
-    std::thread push_image_thread(&Master::m_push_image, &master);
+    std::thread push_image_thread(&Master::m_push_image, &master, launch_param.filename);
     std::thread partition_image_thread(&Master::m_pritition_image, &master);
     std::thread inference_thread(&Master::m_inference, &master);
     std::thread send_data_packet_thread(&Master::m_send_data_packet, &master);
@@ -76,6 +76,13 @@ int main(int argc, char *argv[]) {
       auto diff = duration_cast<std::chrono::milliseconds>(
           frame_time_point[i].second - frame_time_point[i].first);
       std::cout << "frame Time " << i << " " << diff.count() << " milliseconds"
+                << std::endl;
+    }
+
+    for (int i = 1; i < launch_param.frames; ++i) {
+      auto diff = duration_cast<std::chrono::milliseconds>(
+          frame_time_point[i].first - frame_time_point[i-1].first);
+      std::cout << "push image gap " << i << " " << diff.count() << " milliseconds"
                 << std::endl;
     }
   } else if (worker_type == "worker") {

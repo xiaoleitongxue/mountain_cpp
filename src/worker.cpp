@@ -338,8 +338,8 @@ LIB_API image_t Master::load_image(std::string image_filename) {
   return img;
 }
 
-void Master::m_push_image() {
-  std::string image_path = "../dog.jpg";
+void Master::m_push_image(std::string image_path_) {
+  std::string image_path = image_path_;
   int w = m_partition_params[0].in_w;
   int h = m_partition_params[0].in_h;
   int c = m_partition_params[0].in_c;
@@ -375,7 +375,7 @@ void Master::m_push_image() {
     std::chrono::high_resolution_clock::time_point t1 =
         std::chrono::high_resolution_clock::now();
     frame_time_point[i] = {t1, t1};
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    // std::this_thread::sleep_for(std::chrono::milliseconds(30));
   }
   printf("push image exit\n");
 }
