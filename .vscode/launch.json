@@ -13,7 +13,6 @@
                 "${workspaceFolder}/install/config/launch.json",
                 "master"
             ],
-            "preRunCommands": ["export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/nx/.local/lib/python3.6/site-packages/torch/lib"],
             "cwd": "${workspaceFolder}/install/bin"
         },
         {
@@ -25,7 +24,6 @@
                 "${workspaceFolder}/install/config/launch.json",
                 "worker", "0"
             ],
-            "preRunCommands": ["export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/nx/.local/lib/python3.6/site-packages/torch/lib"],
             "cwd": "${workspaceFolder}/install/bin"
         }
     ]
