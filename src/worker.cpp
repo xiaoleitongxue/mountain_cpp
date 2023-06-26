@@ -130,7 +130,7 @@ void Worker::m_inference() {
     Data_packet data_packet = m_prio_task_queue.top();
     m_prio_task_queue.pop();
     lock.unlock();
-    // auto start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
     network net = m_sub_nets[data_packet.stage][data_packet.task_id];
     // assert(data_packet.tensor.sizes()[0] == net.c);
     // assert(data_packet.tensor.sizes()[1] == net.h);
@@ -173,12 +173,12 @@ void Worker::m_inference() {
     std::unique_lock<std::mutex> lock1(m_prio_result_queue_mutex);
     m_prio_result_queue.push(new_data_packet);
     lock1.unlock();
-    // auto stop = std::chrono::high_resolution_clock::now();
-    // auto duration =
-    //     std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-    // std::cout << "Time taken by function: " << duration.count()
-    //           << " milliseconds" << std::endl;
+    std::cout << "inference latency: " << duration.count() << " milliseconds"
+              << std::endl;
   }
 }
 int Worker::m_send_data_packet() {
@@ -372,7 +372,7 @@ int Worker::m_recv_data_packet() {
         std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
         m_prio_task_queue.push(data_packet);
         lock.unlock();
-        printf("worker received\n");
+        // printf("worker received\n");
         // reply
         while (1) {
           if (m_prio_result_queue.size()) {
@@ -388,7 +388,7 @@ int Worker::m_recv_data_packet() {
              data_packet.tensor_size + sizeof(int) * 9, 0);
         // free buffer
         delete[](char *) serialized_data_packet;
-        printf("worker send\n");
+        // printf("worker send\n");
       }
     }
   }
@@ -706,7 +706,10 @@ int Master::m_recv_data_packet() {
 }
 
 int Master::m_send_data_packet(int client_fd, int num) {
+
   for (int i = 0; i < num; ++i) {
+    std::vector<std::chrono::time_point<std::chrono::system_clock>> points;
+    points.push_back(std::chrono::high_resolution_clock::now());
     std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
     Data_packet data_packet = m_prio_task_queue.top();
     m_prio_task_queue.pop();
@@ -718,14 +721,14 @@ int Master::m_send_data_packet(int client_fd, int num) {
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
     delete[](char *) serialized_data_packet;
-  
 
-  printf("Hello message sent\n");
+    points.push_back(std::chrono::high_resolution_clock::now());
+    // printf("Hello message sent\n");
 
-  // valread = read(client_fd, buffer, 1024);
-  // printf("%s\n", buffer);
+    // valread = read(client_fd, buffer, 1024);
+    // printf("%s\n", buffer);
 
-
+    points.push_back(std::chrono::high_resolution_clock::now());
     int metadata_buffer[9];
     // Data_packet recv_data_packet;
     int valread = read(client_fd, metadata_buffer, sizeof(int) * 9);
@@ -740,21 +743,32 @@ int Master::m_send_data_packet(int client_fd, int num) {
     data_packet.tensor_size = metadata_buffer[8];
     char tensor_buffer[data_packet.tensor_size];
     recv(client_fd, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
+    points.push_back(std::chrono::high_resolution_clock::now());
     std::string s(tensor_buffer, data_packet.tensor_size);
     std::istringstream stream_{s};
     // buffer to stream
     torch::Tensor tensor;
     torch::load(tensor, stream_);
+    points.push_back(std::chrono::high_resolution_clock::now());
     // create Data_packet
     data_packet.tensor = tensor;
     std::unique_lock<std::mutex> lock1(m_prio_partition_inference_result_mutex);
     // push to queue
     m_prio_partition_inference_result_queue.push(data_packet);
     lock1.unlock();
-    printf("master recived\n");
+    // printf("master recived\n");
+    points.push_back(std::chrono::high_resolution_clock::now());
+    std::cout << client_fd;
+    for (int i = 1; i < points.size(); ++i) {
+      auto start = points[i - 1];
+      auto stop = points[i];
+      auto duration =
+          std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+      std::cout << " " << duration.count() << " ";
+    }
+    std::cout << std::endl;
   }
 
-  
   // closing the connected socket
 
   return 0;
@@ -783,6 +797,4 @@ void Master::m_inference() {
   float *out = network_predict(m_last_stage_net, X);
 }
 
-Master::~Master(){
-  free_network(m_last_stage_net);
-}
+Master::~Master() { free_network(m_last_stage_net); }

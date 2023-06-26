@@ -3,7 +3,7 @@
   "weights": "../data/yolov2-tiny.weights",
   "filename": "../data/dog.jpg",
   "workers": 4,
-  "frames": 500,
+  "frames": 50,
   "stages": 3,
   "partition_params": [
     {

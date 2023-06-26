@@ -90,18 +90,19 @@ int main(int argc, char *argv[]) {
     std::vector<std::thread> send_data_packet_threads;
 
     for (int i = 0; i < launch_param.frames; ++i) {
-      std::vector<std::chrono::time_point<std::chrono::system_clock>> points;
-      points.push_back(std::chrono::high_resolution_clock::now());
+      // std::vector<std::chrono::time_point<std::chrono::system_clock>> points;
+      
 
       master.m_push_image(i);
-      points.push_back(std::chrono::high_resolution_clock::now());
+      
       master.m_pritition_image();
-      points.push_back(std::chrono::high_resolution_clock::now());
+      
       // inference partition
       for (int j = 0; j < fenpei.size(); ++j) {
         std::thread send_data_packet_thread(&Master::m_send_data_packet,
                                             &master, client_fds[j], fenpei[j]);
         send_data_packet_threads.push_back(std::move(send_data_packet_thread));
+        // master.m_send_data_packet(client_fds[j], fenpei[j]);
       }
 
       for (std::thread &th : send_data_packet_threads) {
@@ -109,18 +110,19 @@ int main(int argc, char *argv[]) {
         if (th.joinable())
           th.join();
       }
-      points.push_back(std::chrono::high_resolution_clock::now());
+      
       // merged partition
       master.m_merge_partitions();
-      points.push_back(std::chrono::high_resolution_clock::now());
+      
       // partition
       master.m_pritition_image();
-      points.push_back(std::chrono::high_resolution_clock::now());
+      
       // inference partition
       for (int j = 0; j < fenpei.size(); ++j) {
         std::thread send_data_packet_thread(&Master::m_send_data_packet,
                                             &master, client_fds[j], fenpei[j]);
         send_data_packet_threads.push_back(std::move(send_data_packet_thread));
+        //master.m_send_data_packet(client_fds[j], fenpei[j]);
       }
 
       for (std::thread &th : send_data_packet_threads) {
@@ -128,25 +130,25 @@ int main(int argc, char *argv[]) {
         if (th.joinable())
           th.join();
       }
-      points.push_back(std::chrono::high_resolution_clock::now());
+      
       // merge
       master.m_merge_partitions();
-      points.push_back(std::chrono::high_resolution_clock::now());
+      
       // inference
       master.m_inference();
-      points.push_back(std::chrono::high_resolution_clock::now());
+      //points.push_back(std::chrono::high_resolution_clock::now());
 
-      for (int i = 1; i < points.size(); ++i) {
-        auto start = points[i - 1];
-        auto stop = points[i];
-        auto duration =
-            std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-        std::cout  << duration.count() << " ";
-      }
-      auto duration =
-            std::chrono::duration_cast<std::chrono::milliseconds>(points[points.size() - 1] - points[1]);
-      std::cout << std::endl << duration.count() << std::endl;
-      std::cout << "------------------------------" << std::endl;
+      // for (int i = 1; i < points.size(); ++i) {
+      //   auto start = points[i - 1];
+      //   auto stop = points[i];
+      //   auto duration =
+      //       std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+      //   std::cout  << duration.count() << " ";
+      // }
+      // auto duration =
+      //       std::chrono::duration_cast<std::chrono::milliseconds>(points[points.size() - 1] - points[1]);
+      // std::cout << std::endl << duration.count() << std::endl;
+      // std::cout << "------------------------------" << std::endl;
     }
     for (int i = 0; i < client_fds.size(); ++i) {
       close(client_fds[i]);
