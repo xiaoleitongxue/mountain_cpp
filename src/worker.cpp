@@ -131,7 +131,7 @@ void Worker::m_inference() {
     m_prio_task_queue.pop();
     lock1.unlock();
 
-    // auto start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
     network net = m_sub_nets[data_packet.stage][data_packet.task_id];
     // assert(data_packet.tensor.sizes()[0] == net.c);
     // assert(data_packet.tensor.sizes()[1] == net.h);
@@ -173,12 +173,12 @@ void Worker::m_inference() {
     // push result to result queue
     std::unique_lock<std::mutex> lock2(m_prio_result_queue_mutex);
     m_prio_result_queue.push(new_data_packet);
-    // auto stop = std::chrono::high_resolution_clock::now();
-    // auto duration =
-    //     std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-    // std::cout << "Time taken by function: " << duration.count()
-    //           << " milliseconds" << std::endl;
+    std::cout << "inference latency: " << duration.count()
+              << " milliseconds" << std::endl;
     // std::cout << "end inference !" << std::endl;
   }
 }
@@ -212,7 +212,7 @@ int Worker::m_send_data_packet() {
     send(sock, serialized_data_packet,
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // free buffer
-    delete[] (char *)serialized_data_packet;
+    delete[](char *) serialized_data_packet;
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
   }
@@ -723,7 +723,7 @@ int Master::m_send_data_packet() {
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
-    delete[] (char *)serialized_data_packet;
+    delete[](char *) serialized_data_packet;
     target_sock++;
   }
 
