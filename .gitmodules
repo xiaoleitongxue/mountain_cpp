@@ -1,6 +1,6 @@
 [submodule "3rdparty/darknet"]
 	path = 3rdparty/darknet
-	url = git@github.com:AlexeyAB/darknet.git
+	url = https://github.com/AlexeyAB/darknet.git
 [submodule "3rdparty/json"]
 	path = 3rdparty/json
-	url = git@github.com:nlohmann/json.git
+	url = https://@github.com/nlohmann/json.git
