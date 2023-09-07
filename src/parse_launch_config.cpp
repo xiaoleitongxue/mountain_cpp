@@ -1,7 +1,8 @@
-#include "partition_model.hpp"
+
 #include <iostream>
-#include <parse_launch_config.hpp>
-launch_parameter read_config(std::string filename) {
+#include "parse_launch_config.hpp"
+
+launch_parameter read_init_config(const std::string& filename) {
   std::ifstream f(filename);
   json data = json::parse(f);
   launch_parameter launch_param;

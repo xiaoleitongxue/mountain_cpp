@@ -12,7 +12,7 @@
 #include "partition_model.hpp"
 #include "stb_image.h"
 
-#include <errno.h>
+#include <cerrno>
 #include <future>
 #include <mutex>
 extern "C" {
@@ -30,7 +30,7 @@ extern "C" {
 
 int make_socket(uint16_t port) {
   int sock;
-  struct sockaddr_in name;
+  struct sockaddr_in name{};
 
   /* Create the socket. */
   sock = socket(AF_INET, SOCK_STREAM, 0);

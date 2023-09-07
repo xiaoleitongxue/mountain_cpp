@@ -3,7 +3,7 @@
 #include <string>
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <partition_model.hpp>
+#include "partition_model.hpp"
 using json = nlohmann::json;
 
 typedef struct launch_parameter{
@@ -17,5 +17,5 @@ typedef struct launch_parameter{
     server_address master_addr;
     std::vector<server_address> worker_addr;
 }launch_parameter;
-launch_parameter read_config(std::string filename);
+launch_parameter read_init_config(const std::string& filename);
 #endif
