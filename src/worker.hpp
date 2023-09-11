@@ -106,7 +106,7 @@ public:
   void m_inference();
   int m_send_data_packet(int client_fd, int num);
   int m_recv_data_packet();
-  void m_push_image(int frame_seq);
+  void m_push_image(int frame_seq, std::string image_path_);
   static LIB_API image_t load_image(std::string image_filename);
 };
 

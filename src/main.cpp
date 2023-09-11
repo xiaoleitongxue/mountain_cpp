@@ -7,10 +7,11 @@
 #include <unistd.h>
 #include <vector>
 
-
+using namespace std::chrono;
 int main(int argc, char *argv[]) {
 
     std::string launch_json = argv[1];
+
     // prase json
     launch_parameter launch_param = read_init_config(launch_json);
 
@@ -34,6 +35,8 @@ int main(int argc, char *argv[]) {
 
     std::string worker_type = argv[2];
     if (worker_type == "master") {
+        const char *workers_ = argv[3];
+        int workers = atoi(workers_);
         network last_stage_net = parse_network_cfg_custom_whc(
                 cfgfile, launch_param.partition_params[launch_param.stages - 1],
                 ftp_params[launch_param.stages - 1], 0, 1, 1);
@@ -54,7 +57,7 @@ int main(int argc, char *argv[]) {
 
         // 每个worker对应一个连接
         std::vector<int> client_fds;
-        for (int i = 0; i < launch_param.workers; ++i) {
+        for (int i = 0; i < workers; ++i) {
             int status, valread, client_fd;
             struct sockaddr_in serv_addr;
 
@@ -83,20 +86,18 @@ int main(int argc, char *argv[]) {
         }
 
         // 每个阶段共有4个task， 计算每个worker分配到几个task
-        std::vector<int> fenpei(launch_param.workers, 4 / launch_param.workers);
-        if (4 % launch_param.workers != 0) {
-            fenpei[launch_param.workers - 1]++;
+        std::vector<int> fenpei(workers, 4 / workers);
+        if (4 % workers != 0) {
+            fenpei[workers - 1]++;
         }
 
         // create thread pool
         std::vector<std::thread> send_data_packet_threads;
 
         for (int i = 0; i < launch_param.frames; ++i) {
-            // std::vector<std::chrono::time_point<std::chrono::system_clock>> points;
-
-            master.m_push_image(i);
-
-            for(int p = 0; p < launch_param.stages - 1; ++p){
+            master.m_push_image(i, launch_param.filename);
+            auto start = high_resolution_clock::now();
+            for (int p = 0; p < launch_param.stages - 1; ++p) {
                 // partition
                 master.m_pritition_image();
 
@@ -118,10 +119,15 @@ int main(int argc, char *argv[]) {
 
             // inference final phase
             master.m_inference();
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<milliseconds >(stop - start);
 
+// To get the value of duration use the count()
+// member function on the duration object
+            std::cout << "frame " << i << ": " << duration.count()  << "ms"<< std::endl;
         }
-        for (int i = 0; i < client_fds.size(); ++i) {
-            close(client_fds[i]);
+        for (int client_fd : client_fds) {
+            close(client_fd);
         }
 
     } else if (worker_type == "worker") {

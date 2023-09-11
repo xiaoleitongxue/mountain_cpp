@@ -55,7 +55,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/nx/src/mountain_cpp/3rdparty/libto
 
 cd launch/bin
 # ./main [launch_config_file] [worker type] [worker id]
-./main ../launch.json worker 0
+./main ../launch-yolov2-tiny.json worker 0
 ```
 
 ###### 4.2. launch master
@@ -67,7 +67,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/nx/src/mountain_cpp/3rdparty/libto
 
 cd launch/bin
 # ./main [launch_config_file] [worker type]
-./main ../launch.json master
+./main ../launch-yolov2-tiny.json master
 ```
 
 

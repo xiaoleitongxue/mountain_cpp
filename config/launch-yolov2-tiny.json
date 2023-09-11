@@ -1,9 +1,8 @@
 {
-  "cfg": "../config/yolov2-tiny.cfg",
-  "weights": "../data/yolov2-tiny.weights",
-  "filename": "../data/dog.jpg",
-  "workers": 1,
-  "frames": 50,
+  "cfg": "../3rdparty/darknet/cfg/yolov2-tiny.cfg",
+  "weights": "../weights/yolov2-tiny.weights",
+  "filename": "../3rdparty/darknet/data/dog.jpg",
+  "frames": 10,
   "stages": 3,
   "partition_params": [
     {
@@ -38,6 +37,18 @@
     {
       "ip": "127.0.0.1",
       "port": 5556
+    },
+    {
+      "ip": "127.0.0.1",
+      "port": 5557
+    },
+    {
+      "ip": "127.0.0.1",
+      "port": 5558
+    },
+    {
+      "ip": "127.0.0.1",
+      "port": 5559
     }
   ]
 }

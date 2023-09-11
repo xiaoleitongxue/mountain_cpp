@@ -9,7 +9,7 @@ launch_parameter read_init_config(const std::string& filename) {
   launch_param.cfg = data["cfg"];
   launch_param.weights = data["weights"];
   launch_param.filename = data["filename"];
-  launch_param.workers = data["workers"];
+
   launch_param.stages = data["stages"];
   launch_param.frames = data["frames"];
   for (auto elem : data["partition_params"]) {

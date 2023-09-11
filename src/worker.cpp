@@ -425,8 +425,8 @@ LIB_API image_t Master::load_image(std::string image_filename) {
   return img;
 }
 
-void Master::m_push_image(int frame_seq) {
-  std::string image_path = "../data/dog.jpg";
+void Master::m_push_image(int frame_seq, std::string image_path_) {
+  std::string image_path = std::move(image_path_);
   int w = m_partition_params[0].in_w;
   int h = m_partition_params[0].in_h;
   int c = m_partition_params[0].in_c;
@@ -446,9 +446,9 @@ void Master::m_push_image(int frame_seq) {
   c10::IntArrayRef s = {sized.c, sized.h, sized.w};
 
   torch::Tensor tensor = torch::from_blob(sized.data, s).clone();
-
+#ifdef GPU
   tensor = tensor.to(torch::kCUDA);
-
+#endif
   Data_packet data_packet{frame_seq, 0,       0,       0, 0,
                           sized.w,   sized.h, sized.c, 0, tensor};
   // std::cout << *sized.data << std::endl;
@@ -532,8 +532,13 @@ void Master::m_merge_partitions() {
   c10::IntArrayRef s = {m_partition_params[stage].out_c,
                         m_partition_params[stage].out_h,
                         m_partition_params[stage].out_w};
+#ifdef GPU
   torch::Tensor merged =
       torch::rand(s, torch::TensorOptions().device(torch::kCUDA));
+#else
+    torch::Tensor merged =
+            torch::rand(s);
+#endif
   // assert(merged.sizes()[0] == m_net.layers[to].out_c);
   // assert(merged.sizes()[1] == m_net.layers[to].out_h);
   // assert(merged.sizes()[2] == m_net.layers[to].out_w);
