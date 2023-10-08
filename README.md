@@ -1,5 +1,7 @@
 # mountain_cpp
 
+This project is for parallel inference on GPU-equipped edge cluster.
+
 ### 1. build 3rd party
 
 ###### 1.1 build darknet
