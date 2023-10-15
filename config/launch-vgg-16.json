@@ -1,0 +1,54 @@
+{
+  "cfg": "../3rdparty/darknet/cfg/vgg-16.cfg",
+  "weights": "../weights/vgg-16.weights",
+  "filename": "../3rdparty/darknet/data/dog.jpg",
+  "frames": 10,
+  "stages": 3,
+  "partition_params": [
+    {
+      "partition_w": 2,
+      "partition_h": 2,
+      "partitions": 4,
+      "from": 1,
+      "to": 6
+    },
+    {
+      "partition_w": 2,
+      "partition_h": 2,
+      "partitions": 4,
+      "from": 7,
+      "to": 17
+    },
+    {
+      "partition_w": 1,
+      "partition_h": 1,
+      "partitions": 1,
+      "from": 18,
+      "to": 25
+    }
+  ],
+  "master_addr": [
+    {
+      "ip": "127.0.0.1",
+      "port": 5555
+    }
+  ],
+  "worker_addr": [
+    {
+      "ip": "127.0.0.1",
+      "port": 5556
+    },
+    {
+      "ip": "127.0.0.1",
+      "port": 5557
+    },
+    {
+      "ip": "127.0.0.1",
+      "port": 5558
+    },
+    {
+      "ip": "127.0.0.1",
+      "port": 5559
+    }
+  ]
+}
