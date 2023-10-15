@@ -1,5 +1,3 @@
-# mountain_cpp
-
 # How to build
 ## Prepare
 
