@@ -1,5 +1,18 @@
 # mountain_cpp
 
+# How to build
+## Prepare
+
+### clone repository
+```
+git clone --recursive https://github.com/xiaoleitongxue/mountain_cpp.git
+```
+### Download libtorch and unzip
+```
+wget https://download.pytorch.org/libtorch/nightly/cpu/libtorch-shared-with-deps-latest.zip
+unzip libtorch-shared-with-deps-latest.zip
+```
+## build
 ### 1. build 3rd party
 
 ###### 1.1 build darknet
