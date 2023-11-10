@@ -8,113 +8,160 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 option(ENABLE_CUDA "Enable CUDA support" OFF)
 
 # find package with config mode
-set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/share/cmake/Torch)
-find_package(Torch REQUIRED CONFIGS TorchConfig.cmake)
+set(Torch_DIR "C:/Users/postb/miniconda3/Lib/site-packages/torch/share/cmake")
+find_package(Torch REQUIRED PATHS "C:/Users/postb/miniconda3/Lib/site-packages/torch/share/cmake")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
-
 include(FetchContent)
-FetchContent_Declare(
-  darknet
-  URL https://github.com/AlexeyAB/darknet/archive/refs/tags/yolov4.zip
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-)
-# # For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(darknet)
+include(ExternalProject)
 
+# FetchContent_Declare(
+# darknet
+# URL https://github.com/AlexeyAB/darknet/archive/refs/tags/yolov4.zip
+# DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+# )
+
+# # For Windows: Prevent overriding the parent project's compiler/linker settings
+# set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+# 获取外部项目的路径
+# get_target_property(DARKNET_DIR darknet SOURCE_DIR)
+find_package(Threads REQUIRED)
+
+# set(PROTOBUF_TAR_GZ https://github.com/google/protobuf/archive/v3.4.0.tar.gz)
+
+# ExternalProject_Add(
+# protobuf-external
+# PREFIX protobuf
+# URL ${PROTOBUF_TAR_GZ}
+# BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/protobuf
+# CMAKE_CACHE_ARGS
+# "-DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}"
+# "-Dprotobuf_BUILD_TESTS:BOOL=OFF"
+# "-Dprotobuf_BUILD_EXAMPLES:BOOL=OFF"
+# "-Dprotobuf_WITH_ZLIB:BOOL=OFF"
+# "-DCMAKE_CXX_COMPILER:STRING=${CMAKE_CXX_COMPILER}"
+# # other project specific parameters
+# SOURCE_SUBDIR cmake
+# BUILD_ALWAYS 1
+# STEP_TARGETS build
+# INSTALL_COMMAND ""
+# )
+
+# EXternalProject_Get_Property(protobuf-external source_dir)
+# include_directories(${source_dir}/src)
+# link_directories(${CMAKE_CURRENT_BINARY_DIR}/protobuf)
+
+# 在外部项目构建后，添加一个自定义构建步骤
+ExternalProject_Add(
+        darknet
+        URL https://github.com/AlexeyAB/darknet/archive/refs/tags/yolov4.zip
+        CMAKE_ARGS
+        "-DCMAKE_BUILD_TYPE=Release"
+        "-DENABLE_OPENCV=OFF"
+        "-DENABLE_CUDA=OFF"
+        DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/_deps/darknet-download"
+        BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/darknet-build"
+        SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/darknet-src"
+        STEP_TARGETS build
+        INSTALL_COMMAND ""
+        TEST_COMMAND ""
+        DOWNLOAD_EXTRACT_TIMESTAMP DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+
+# FetchContent_MakeAvailable(darknet)
 
 # set(Darknet_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/share/darknet)
 # find_package(Darknet REQUIRED)
+# include(FetchContent)
+# FetchContent_Declare(
+# nlohmann_json
+# URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.2.zip
+# DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+# )
 
-include(FetchContent)
-FetchContent_Declare(
-  nlohmann_json
-  URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.2.zip
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-)
-# # For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(nlohmann_json)
+# # # For Windows: Prevent overriding the parent project's compiler/linker settings
+# set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# FetchContent_MakeAvailable(nlohmann_json)
 
-# set(nlohmann_json_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/json/install/share/cmake/nlohmann_json)
-# find_package(nlohmann_json CONFIGS REQUIRED nlohmann_jsonConfig.cmake)
+# # set(nlohmann_json_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/json/install/share/cmake/nlohmann_json)
+# # find_package(nlohmann_json CONFIGS REQUIRED nlohmann_jsonConfig.cmake)
+# add_library(data_packet src/data_packet.cpp)
+# target_include_directories(data_packet PRIVATE src)
+# target_link_libraries(data_packet PRIVATE "${TORCH_LIBRARIES}")
 
+# add_library(partition_model src/partition_model.cpp)
+# target_include_directories(partition_model
+# PUBLIC src ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src)
+# target_link_libraries(
+# partition_model PUBLIC darknet::dark)
 
+# if(ENABLE_CUDA)
+# target_link_libraries(
+# partition_model PUBLIC -L/usr/local/cuda/lib64 -lcuda -lcudart
+# -lcublas -lcurand)
+# endif()
 
-add_library(data_packet src/data_packet.cpp)
-target_include_directories(data_packet PRIVATE src)
-target_link_libraries(data_packet PRIVATE "${TORCH_LIBRARIES}")
+# add_library(parse_launch_config src/parse_launch_config.cpp src/parse_launch_config.hpp)
+# target_include_directories(parse_launch_config
+# PUBLIC src ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src)
+# target_link_libraries(
+# parse_launch_config PUBLIC partition_model nlohmann_json::nlohmann_json
+# darknet::dark)
 
-add_library(partition_model src/partition_model.cpp)
-target_include_directories(partition_model
-        PUBLIC src ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src)
-target_link_libraries(
-        partition_model PUBLIC Darknet::dark)
-if (ENABLE_CUDA)
-    target_link_libraries(
-            partition_model PUBLIC -L/usr/local/cuda/lib64 -lcuda -lcudart
-            -lcublas -lcurand)
-endif ()
+# add_library(inference_helper src/inference_helper.cpp)
+# target_include_directories(inference_helper
+# PUBLIC src ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src)
 
-add_library(parse_launch_config src/parse_launch_config.cpp src/parse_launch_config.hpp)
-target_include_directories(parse_launch_config
-        PUBLIC src ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src)
-target_link_libraries(
-        parse_launch_config PUBLIC partition_model nlohmann_json::nlohmann_json
-        Darknet::dark)
+# target_link_libraries(inference_helper PUBLIC partition_model Darknet::dark)
 
-add_library(inference_helper src/inference_helper.cpp)
-target_include_directories(inference_helper
-        PUBLIC src ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src)
+# add_library(worker src/worker.cpp)
 
-target_link_libraries(inference_helper PUBLIC partition_model Darknet::dark)
+# if(ENABLE_CUDA)
+# target_compile_definitions(worker PUBLIC GPU)
+# endif()
 
-add_library(worker src/worker.cpp)
-if(ENABLE_CUDA)
-    target_compile_definitions(worker PUBLIC GPU)
-endif()
-target_include_directories(
-        worker PRIVATE ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src
-        ${CMAKE_CURRENT_LIST_DIR}/3rdparty/stb/include src)
-target_link_libraries(worker PRIVATE data_packet "${TORCH_LIBRARIES}"
-        partition_model Darknet::dark)
+# target_include_directories(
+# worker PRIVATE ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src
+# ${CMAKE_CURRENT_LIST_DIR}/3rdparty/stb/include src)
+# target_link_libraries(worker PRIVATE data_packet "${TORCH_LIBRARIES}"
+# partition_model darknet::dark)
 
-add_executable(main src/main.cpp)
-if(ENABLE_CUDA)
-    target_compile_definitions(main PUBLIC GPU)
-endif()
-target_include_directories(
-        main PUBLIC ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src
-        ${CMAKE_CURRENT_LIST_DIR}/3rdparty/stb/include src)
-#target_link_options(main PRIVATE -Wl,-rpath,../lib)
-target_link_libraries(
-        main PUBLIC worker parse_launch_config nlohmann_json::nlohmann_json partition_model inference_helper
-         Darknet::dark)
+# add_executable(main src/main.cpp)
 
+# if(ENABLE_CUDA)
+# target_compile_definitions(main PUBLIC GPU)
+# endif()
 
-# install executable
-# set(CMAKE_INSTALL_RPATH ${PROJECT_SOURCE_DIR}/3rdparty/lib)
-set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/mc_install)
+# target_include_directories(
+# main PUBLIC ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/src
+# ${CMAKE_CURRENT_LIST_DIR}/3rdparty/stb/include src)
 
+# # target_link_options(main PRIVATE -Wl,-rpath,../lib)
+# target_link_libraries(
+# main PUBLIC worker parse_launch_config nlohmann_json::nlohmann_json partition_model inference_helper
+# Darknet::dark)
 
-## install darknet shared library
-#install(IMPORTED_RUNTIME_ARTIFACTS Darknet::dark DESTINATION lib)
+# # install executable
+# # set(CMAKE_INSTALL_RPATH ${PROJECT_SOURCE_DIR}/3rdparty/lib)
+# set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/mc_install)
 
-# # install libtorch shared library
-# install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/lib/ DESTINATION ./)
+# # # install darknet shared library
+# # install(IMPORTED_RUNTIME_ARTIFACTS Darknet::dark DESTINATION lib)
 
-## set where main to find shared library
-#SET_TARGET_PROPERTIES(main PROPERTIES INSTALL_RPATH "$ORIGIN;../lib")
-# install executable
-install(TARGETS main RUNTIME DESTINATION bin)
+# # # install libtorch shared library
+# # install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/lib/ DESTINATION ./)
 
-### install image
-#install(FILES ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/data/dog.jpg DESTINATION data)
+# # # set where main to find shared library
+# # SET_TARGET_PROPERTIES(main PROPERTIES INSTALL_RPATH "$ORIGIN;../lib")
+# # install executable
+# install(TARGETS main RUNTIME DESTINATION bin)
 
+# # ## install image
+# # install(FILES ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/data/dog.jpg DESTINATION data)
 
-### install config
-#install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/config DESTINATION ./)
+# # ## install config
+# # install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/config DESTINATION ./)
 
-## install weights
-#install(FILES ${CMAKE_CURRENT_LIST_DIR}/data/yolov2-tiny.weights DESTINATION data)
+# # # install weights
+# # install(FILES ${CMAKE_CURRENT_LIST_DIR}/data/yolov2-tiny.weights DESTINATION data)
