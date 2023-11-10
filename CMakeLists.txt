@@ -11,11 +11,35 @@ option(ENABLE_CUDA "Enable CUDA support" OFF)
 set(Torch_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/libtorch/share/cmake/Torch)
 find_package(Torch REQUIRED CONFIGS TorchConfig.cmake)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-set(Darknet_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/share/darknet)
-find_package(Darknet REQUIRED)
 
-set(nlohmann_json_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/json/install/share/cmake/nlohmann_json)
-find_package(nlohmann_json CONFIGS REQUIRED nlohmann_jsonConfig.cmake)
+
+include(FetchContent)
+FetchContent_Declare(
+  darknet
+  URL https://github.com/AlexeyAB/darknet/archive/refs/tags/yolov4.zip
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+# # For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(darknet)
+
+
+# set(Darknet_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/darknet/share/darknet)
+# find_package(Darknet REQUIRED)
+
+include(FetchContent)
+FetchContent_Declare(
+  nlohmann_json
+  URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.2.zip
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+# # For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# set(nlohmann_json_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/json/install/share/cmake/nlohmann_json)
+# find_package(nlohmann_json CONFIGS REQUIRED nlohmann_jsonConfig.cmake)
+
 
 
 add_library(data_packet src/data_packet.cpp)
