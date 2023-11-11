@@ -10,15 +10,38 @@
 #include <string>
 
 #include "partition_model.hpp"
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include <cerrno>
 #include <future>
 #include <mutex>
 extern "C" {
+
+#if defined(WIN32)
+#include <winsock2.h>
+
+#elif defined(__unix)
+
 #include <arpa/inet.h>
-#include <netdb.h>
-#include <netinet/in.h>
+
+#endif
+
+// #include <netdb.h>
+// #include <netinet/in.h>
+
+
+#ifdef WIN32
+# include <Winsock2.h>
+#else
+# include <sys/socket.h>
+# include <sys/param.h>
+# include <netinet/in.h>
+# include <arpa/inet.h>
+# indlude <netdb.h>
+#endif
+
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

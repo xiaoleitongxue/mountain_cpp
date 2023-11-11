@@ -2,18 +2,31 @@
 #define WORKER_HPP_LLL
 
 #include <ATen/core/TensorBody.h>
-#include <arpa/inet.h>
-#include <c10/core/DeviceType.h>
 
+
+
+
+#ifdef WIN32
+# include <Winsock2.h>
+#else
+# include <sys/socket.h>
+# include <sys/param.h>
+# include <netinet/in.h>
+# include <arpa/inet.h>
+# indlude <netdb.h>
+#endif
+
+#include <c10/core/DeviceType.h>
 
 #include <data_packet.hpp>
 #include <torch/serialize/input-archive.h>
 #include <torch/torch.h>
 
 #include "partition_model.hpp"
-#include <darknet.h>
 #include "yolo_v2_class.hpp"
+#include <darknet.h>
 #include <mutex>
+
 
 extern std::vector<std::pair<std::chrono::high_resolution_clock::time_point,
                              std::chrono::high_resolution_clock::time_point>>
@@ -100,7 +113,7 @@ public:
   Master() = delete;
   Master(const Master &) = delete;
   Master(const Master &&) = delete;
-  ~ Master();
+  ~Master();
   void m_pritition_image();
   void m_merge_partitions();
   void m_inference();
