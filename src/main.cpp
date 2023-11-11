@@ -4,7 +4,14 @@
 #include "parse_launch_config.hpp"
 #include <string>
 #include <thread>
-#include <unistd.h>
+#ifdef WIN32
+#include <direct.h> // for _getcwd, _chdir, etc.
+#include <io.h>     // for _write, _read, _access, etc.
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <unistd.h> // for write, read, access, etc.
+#endif
 #include <vector>
 
 using namespace std::chrono;
@@ -18,20 +25,20 @@ int main(int argc, char *argv[]) {
     char *cfgfile = const_cast<char *>(launch_param.cfg.c_str());
     char *weights_file = const_cast<char *>(launch_param.weights.c_str());
     // load_network
-    network net = parse_network_cfg_custom(cfgfile, 1, 1);
+    network* net = load_network(cfgfile, weights_file, 0);
 
     for (int i = 0; i < launch_param.stages; ++i) {
         int from = launch_param.partition_params[i].from;
         int to = launch_param.partition_params[i].to;
-        launch_param.partition_params[i].in_w = net.layers[from].w;
-        launch_param.partition_params[i].in_h = net.layers[from].h;
-        launch_param.partition_params[i].in_c = net.layers[from].c;
-        launch_param.partition_params[i].out_w = net.layers[to].out_w;
-        launch_param.partition_params[i].out_h = net.layers[to].out_h;
-        launch_param.partition_params[i].out_c = net.layers[to].out_c;
+        launch_param.partition_params[i].in_w = net->layers[from].w;
+        launch_param.partition_params[i].in_h = net->layers[from].h;
+        launch_param.partition_params[i].in_c = net->layers[from].c;
+        launch_param.partition_params[i].out_w = net->layers[to].out_w;
+        launch_param.partition_params[i].out_h = net->layers[to].out_h;
+        launch_param.partition_params[i].out_c = net->layers[to].out_c;
     }
     std::vector<ftp_parameter> ftp_params =
-            perform_ftp(launch_param.partition_params, launch_param.stages, net);
+            perform_ftp(launch_param.partition_params, launch_param.stages, *net);
 
     std::string worker_type = argv[2];
     if (worker_type == "master") {
@@ -41,11 +48,11 @@ int main(int argc, char *argv[]) {
                 cfgfile, launch_param.partition_params[launch_param.stages - 1],
                 ftp_params[launch_param.stages - 1], 0, 1, 1);
         load_weights_upto_subnet(
-                &net, &last_stage_net, weights_file,
+                net, &last_stage_net, weights_file,
                 launch_param.partition_params[launch_param.stages - 1].to,
                 launch_param.partition_params[launch_param.stages - 1].from,
                 launch_param.partition_params[launch_param.stages - 1].to);
-        free_network(net);
+        free_network(*net);
         Master master{launch_param.master_addr.ip,
                       launch_param.master_addr.port,
                       launch_param.stages,
@@ -142,10 +149,10 @@ int main(int argc, char *argv[]) {
         }
 
         // load weights
-        load_sub_nets_weights(net, sub_nets, cfgfile, weights_file,
+        load_sub_nets_weights(*net, sub_nets, cfgfile, weights_file,
                               launch_param.stages - 1,
                               launch_param.partition_params);
-        free_network(net);
+        free_network(*net);
         // flip weights
         flip_sub_nets_weights(sub_nets, launch_param.stages - 1,
                               launch_param.partition_params, ftp_params);

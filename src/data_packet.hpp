@@ -1,5 +1,5 @@
-#ifndef DATA_BLOB_HPP
-#define DATA_BLOB_HPP
+#ifndef DATA_PACKET_HPP
+#define DATA_PACKET_HPP
 #include <torch/torch.h>
 #include <torch/serialize/input-archive.h>
 typedef struct Data_packet {

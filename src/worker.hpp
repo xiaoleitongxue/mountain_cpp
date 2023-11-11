@@ -3,22 +3,19 @@
 
 #include <ATen/core/TensorBody.h>
 
-
-
-
 #ifdef WIN32
-# include <Winsock2.h>
+#include <Winsock2.h>
 #else
-# include <sys/socket.h>
-# include <sys/param.h>
-# include <netinet/in.h>
-# include <arpa/inet.h>
-# indlude <netdb.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/param.h>
+#include <sys/socket.h>
+#indlude <netdb.h>
 #endif
 
 #include <c10/core/DeviceType.h>
 
-#include <data_packet.hpp>
+#include "data_packet.hpp"
 #include <torch/serialize/input-archive.h>
 #include <torch/torch.h>
 
@@ -26,7 +23,6 @@
 #include "yolo_v2_class.hpp"
 #include <darknet.h>
 #include <mutex>
-
 
 extern std::vector<std::pair<std::chrono::high_resolution_clock::time_point,
                              std::chrono::high_resolution_clock::time_point>>
@@ -123,6 +119,6 @@ public:
   static LIB_API image_t load_image(std::string image_filename);
 };
 
-inline static void *serialize_data_packet(Data_packet &data_packet);
+inline static char *serialize_data_packet(Data_packet &data_packet);
 
 #endif

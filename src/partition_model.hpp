@@ -1,14 +1,13 @@
 #ifndef PARTITION_MODEL_HPP
 #define PARTITION_MODEL_HPP
-#include <darknet_include.hpp>
 
+#include <vector>
+#include <string>
+#include <darknet.h>
 typedef struct server_address {
   std::string ip;
   int port;
 } server_address;
-
-
-
 
 typedef struct partition_parameter {
   int partition_w;
@@ -59,13 +58,12 @@ perform_ftp(std::vector<partition_parameter> partition_para, int stages,
 network parse_network_cfg_custom_whc(char *filename,
                                      partition_parameter partition_param,
                                      ftp_parameter ftp_param, int task_id,
-                                     int batch,
-                                     int time_steps);
+                                     int batch, int time_steps);
 
 void load_weights_upto_subnet(network *net, network *sub_net, char *filename,
-                              int cutoff, int start_layer,
-                              int end_layer);
-void load_sub_nets_weights(network net, std::vector<std::vector<network>> &sub_nets,
+                              int cutoff, int start_layer, int end_layer);
+void load_sub_nets_weights(network net,
+                           std::vector<std::vector<network>> &sub_nets,
                            char *filename, char *weights, int stages,
                            std::vector<partition_parameter> partition_params);
 #endif

@@ -3,6 +3,7 @@
 #include <c10/core/DeviceType.h>
 #include <chrono>
 #include <iostream>
+//#include <vcruntime.h>
 #include <worker.hpp>
 
 #include <cassert>
@@ -30,30 +31,43 @@ extern "C" {
 // #include <netdb.h>
 // #include <netinet/in.h>
 
-
 #ifdef WIN32
-# include <Winsock2.h>
+#include <Winsock2.h>
 #else
-# include <sys/socket.h>
-# include <sys/param.h>
-# include <netinet/in.h>
-# include <arpa/inet.h>
-# indlude <netdb.h>
-#endif
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/param.h>
+#include <sys/socket.h>
 
+#indlude < netdb.h>
+#endif
 
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef WIN32
+#include <Winsock2.h>
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/param.h>
 #include <sys/socket.h>
+#indlude < netdb.h>
+#endif
 #include <sys/types.h>
 #include <time.h>
-#include <unistd.h>
+#ifdef WIN32
+#include <direct.h> // for _getcwd, _chdir, etc.
+#include <io.h>     // for _write, _read, _access, etc.
+
+#else
+#include <unistd.h> // for write, read, access, etc.
+#endif
 }
 
 int make_socket(uint16_t port) {
   int sock;
-  struct sockaddr_in name{};
+  struct sockaddr_in name {};
 
   /* Create the socket. */
   sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -102,13 +116,13 @@ void show_console_result(std::vector<bbox_t> const result_vec,
 }
 
 std::vector<std::string> objects_names_from_file(std::string const filename) {
-  std::ifstream file(filename);
+  // std::ifstream file(filename);
   std::vector<std::string> file_lines;
-  if (!file.is_open())
-    return file_lines;
-  for (std::string line; getline(file, line);)
-    file_lines.push_back(line);
-  std::cout << "object names loaded \n";
+  // if (!file.is_open())
+  //   return file_lines;
+  // for (std::string line; getline(file, line);)
+  //   file_lines.push_back(line);
+  // std::cout << "object names loaded \n";
   return file_lines;
 }
 
@@ -230,11 +244,11 @@ int Worker::m_send_data_packet() {
     Data_packet data_packet = m_prio_result_queue.top();
     m_prio_result_queue.pop();
     lock.unlock();
-    void *serialized_data_packet = serialize_data_packet(data_packet);
+    char *serialized_data_packet = serialize_data_packet(data_packet);
     send(sock, serialized_data_packet,
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // free buffer
-    delete[](char *) serialized_data_packet;
+    delete[] (char *)serialized_data_packet;
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
   }
@@ -256,7 +270,7 @@ int Worker::m_recv_data_packet() {
   fd_set readfds;
 
   // a message
-  char *message = "ECHO Daemon v1.0 \r\n";
+  std::string message = "ECHO Daemon v1.0 \r\n";
 
   // initialise all client_socket[] to 0 so not checked
   for (i = 0; i < max_clients; i++) {
@@ -333,7 +347,7 @@ int Worker::m_recv_data_packet() {
     // then its an incoming connection
     if (FD_ISSET(master_socket, &readfds)) {
       if ((new_socket = accept(master_socket, (struct sockaddr *)&address,
-                               (socklen_t *)&addrlen)) < 0) {
+                               &addrlen)) < 0) {
         perror("accept");
         exit(EXIT_FAILURE);
       }
@@ -381,10 +395,11 @@ int Worker::m_recv_data_packet() {
         data_packet.h = metadata_buffer[6];
         data_packet.c = metadata_buffer[7];
         data_packet.tensor_size = metadata_buffer[8];
-        char tensor_buffer[data_packet.tensor_size];
+        char* tensor_buffer = new char[data_packet.tensor_size];
         recv(sd, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
 
         std::string s(tensor_buffer, data_packet.tensor_size);
+        delete[] tensor_buffer;
         std::istringstream stream_{s};
         // buffer to stream
         torch::Tensor tensor;
@@ -406,11 +421,11 @@ int Worker::m_recv_data_packet() {
         data_packet = m_prio_result_queue.top();
         m_prio_result_queue.pop();
         lock1.unlock();
-        void *serialized_data_packet = serialize_data_packet(data_packet);
+        char *serialized_data_packet = serialize_data_packet(data_packet);
         send(sd, serialized_data_packet,
              data_packet.tensor_size + sizeof(int) * 9, 0);
         // free buffer
-        delete[](char *) serialized_data_packet;
+        delete[] (char *)serialized_data_packet;
         // printf("worker send\n");
       }
     }
@@ -559,8 +574,7 @@ void Master::m_merge_partitions() {
   torch::Tensor merged =
       torch::rand(s, torch::TensorOptions().device(torch::kCUDA));
 #else
-    torch::Tensor merged =
-            torch::rand(s);
+  torch::Tensor merged = torch::rand(s);
 #endif
   // assert(merged.sizes()[0] == m_net.layers[to].out_c);
   // assert(merged.sizes()[1] == m_net.layers[to].out_h);
@@ -642,8 +656,8 @@ int Master::m_recv_data_packet() {
   int sock;
   fd_set active_fd_set, read_fd_set;
   int i;
-  struct sockaddr_in clientname;
-  size_t size;
+  struct sockaddr clientname;
+  int size;
 
   /* Create the socket and set it up to accept connections. */
   sock = make_socket(m_port);
@@ -672,7 +686,7 @@ int Master::m_recv_data_packet() {
           int new_sock = 0;
           size = sizeof(clientname);
           new_sock =
-              accept(sock, (struct sockaddr *)&clientname, (socklen_t *)&size);
+              accept(sock, (struct sockaddr *)&clientname, &size);
           if (new_sock < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
@@ -696,9 +710,10 @@ int Master::m_recv_data_packet() {
           data_packet.h = metadata_buffer[6];
           data_packet.c = metadata_buffer[7];
           data_packet.tensor_size = metadata_buffer[8];
-          char tensor_buffer[data_packet.tensor_size];
+          char* tensor_buffer = new char[data_packet.tensor_size];
           recv(i, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
           std::string s(tensor_buffer, data_packet.tensor_size);
+          delete[] tensor_buffer;
           std::istringstream stream_{s};
           // buffer to stream
           torch::Tensor tensor;
@@ -736,19 +751,19 @@ int Master::m_recv_data_packet() {
 int Master::m_send_data_packet(int client_fd, int num) {
 
   for (int i = 0; i < num; ++i) {
-    std::vector<std::chrono::time_point<std::chrono::system_clock>> points;
+    std::vector<std::chrono::time_point<std::chrono::steady_clock>> points;
     points.push_back(std::chrono::high_resolution_clock::now());
     std::unique_lock<std::mutex> lock(m_prio_task_queue_mutex);
     Data_packet data_packet = m_prio_task_queue.top();
     m_prio_task_queue.pop();
     lock.unlock();
     data_packet.tensor = data_packet.tensor.to(torch::kCPU);
-    void *serialized_data_packet = serialize_data_packet(data_packet);
+    char *serialized_data_packet = serialize_data_packet(data_packet);
     send(client_fd, serialized_data_packet,
          data_packet.tensor_size + sizeof(int) * 9, 0);
     // printf("frame %d stage %d task_id %d send\n", data_packet.frame_seq,
     //        data_packet.stage, data_packet.task_id);
-    delete[](char *) serialized_data_packet;
+    delete[] (char *)serialized_data_packet;
 
     points.push_back(std::chrono::high_resolution_clock::now());
     // printf("Hello message sent\n");
@@ -769,10 +784,11 @@ int Master::m_send_data_packet(int client_fd, int num) {
     data_packet.h = metadata_buffer[6];
     data_packet.c = metadata_buffer[7];
     data_packet.tensor_size = metadata_buffer[8];
-    char tensor_buffer[data_packet.tensor_size];
+    char* tensor_buffer = new char[data_packet.tensor_size];
     recv(client_fd, tensor_buffer, data_packet.tensor_size, MSG_WAITALL);
     points.push_back(std::chrono::high_resolution_clock::now());
     std::string s(tensor_buffer, data_packet.tensor_size);
+    delete[] tensor_buffer;
     std::istringstream stream_{s};
     // buffer to stream
     torch::Tensor tensor;
@@ -802,7 +818,7 @@ int Master::m_send_data_packet(int client_fd, int num) {
   return 0;
 }
 
-inline static void *serialize_data_packet(Data_packet &data_packet) {
+inline static char *serialize_data_packet(Data_packet &data_packet) {
   std::ostringstream stream;
   torch::save(data_packet.tensor, stream);
   const std::string str = stream.str();

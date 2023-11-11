@@ -21,3 +21,5 @@ main
 install/
 weights/
 mc_install/
+3rdparty/*
+.idea/
